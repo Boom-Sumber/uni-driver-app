@@ -1,0 +1,79 @@
+@font-face {
+  font-family: "icon"; /* Project id 4809972 */
+  src: url('iconfont.woff2?t=1764081228805') format('woff2'),
+       url('iconfont.woff?t=1764081228805') format('woff'),
+       url('iconfont.ttf?t=1764081228805') format('truetype');
+}
+
+.icon {
+  font-family: "icon" !important;
+  font-size: 16px;
+  font-style: normal;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.icon-bianji:before {
+  content: "\e605";
+}
+
+.icon-user:before {
+  content: "\e627";
+}
+
+.icon-feiyongguanli:before {
+  content: "\e69a";
+}
+
+.icon-daolu:before {
+  content: "\e8b0";
+}
+
+.icon-guanli:before {
+  content: "\e640";
+}
+
+.icon-gerenzhongxin:before {
+  content: "\e626";
+}
+
+.icon-xinzeng:before {
+  content: "\e60f";
+}
+
+.icon-shouye:before {
+  content: "\e602";
+}
+
+.icon-shuju:before {
+  content: "\e604";
+}
+
+.icon-delivery:before {
+  content: "\e6ec";
+}
+
+.icon-sun:before {
+  content: "\e861";
+}
+
+.icon-moon:before {
+  content: "\e981";
+}
+
+.icon-close:before {
+  content: "\e61f";
+}
+
+.icon-min:before {
+  content: "\e62d";
+}
+
+.icon-3zuidahua-1:before {
+  content: "\e65d";
+}
+
+.icon-3zuidahua-3:before {
+  content: "\e692";
+}
+

@@ -1,0 +1,169 @@
+{
+  "pages": [
+    {
+      "path": "pages/start/start",
+      "style": {
+        "navigationBarTitleText": "",
+        "navigationStyle": "custom"
+      },
+      "name": "start"
+    },
+    {
+      "path": "pages/auth/login",
+      "style": {
+        "navigationBarTitleText": "",
+        "navigationStyle": "custom"
+      },
+      "name": "login"
+    },
+    {
+      "path": "pages/index",
+      "style": {
+        "app-plus": {
+          "titleNView": {
+            "titleText": "首页",
+            "splitLine": {
+              "color": "#9b9b9b"
+            },
+            "buttons": [
+              {
+                "type": "none",
+                "fontSrc": "static/iconfont.ttf",
+                "text": "\ue626",
+                "fontSize": "18px",
+                "color": "@navTxtStyle",
+                "float": "right"
+              },
+              {
+                "type": "none",
+                "fontSrc": "static/iconfont.ttf",
+                "text": "\ue6ec",
+                "fontSize": "18px",
+                "color": "@navTxtStyle",
+                "float": "right"
+              }
+            ]
+          }
+        }
+      },
+      "name": "index"
+    },
+    {
+      "path": "pages/insert/insert",
+      "style": {
+        "navigationBarTitleText": "新增"
+      },
+      "name": "insert"
+    },
+    {
+      "path": "pages/my/my",
+      "style": {
+        "navigationBarTitleText": "个人中心"
+      },
+      "name": "my"
+    },
+    {
+      "path": "pages/tripManage/tripManage",
+      "style": {
+        "navigationBarTitleText": "行程管理"
+      },
+      "name": "tripManage"
+    },
+    {
+      "path": "pages/data/data",
+      "style": {
+        "navigationBarTitleText": "数据中心"
+      },
+      "name": "data"
+    }
+  ],
+  "globalStyle": {
+    "backgroundColor": "@bgColor",
+    "backgroundColorBottom": "@bgColorBottom",
+    "backgroundColorTop": "@bgColorTop",
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "white",
+    "navigationBarTextStyle": "@navTxtStyle",
+    "enablePullDownRefresh": true,
+    "transparentTitle": "auto",
+    "app-plus": {
+      "titleNView": {
+        "backgroundColor": "#1296db"
+      },
+      "pullToRefresh": {
+        "range": "50px"
+      }
+    }
+  },
+  "tabBar": {
+    "color": "@tabFontColor",
+    "iconfontSrc": "static/iconfont.ttf",
+    "selectedColor": "@tabSelectedColor",
+    "backgroundColor": "white",
+    "fontSize": "12px",
+    "list": [
+      {
+        "pagePath": "pages/index",
+        "iconfont": {
+          "text": "\ue602",
+          "selectedText": "\ue602",
+          "fontSize": "16px",
+          "color": "@tabFontColor",
+          "selectedColor": "@tabSelectedColor"
+        },
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/tripManage/tripManage",
+        "iconfont": {
+          "text": "\ue640",
+          "selectedText": "\ue640",
+          "fontSize": "16px",
+          "color": "@tabFontColor",
+          "selectedColor": "@tabSelectedColor"
+        },
+        "text": "行程管理"
+      },
+      {
+        "pagePath": "pages/insert/insert",
+        "iconfont": {
+          "text": "\ue60f",
+          "selectedText": "\ue60f",
+          "fontSize": "25px",
+          "color": "@tabFontColor",
+          "selectedColor": "@tabSelectedColor"
+        },
+        "text": ""
+      },
+      {
+        "pagePath": "pages/data/data",
+        "iconfont": {
+          "text": "\ue604",
+          "selectedText": "\ue604",
+          "fontSize": "16px",
+          "color": "@tabFontColor",
+          "selectedColor": "@tabSelectedColor"
+        },
+        "text": "数据中心"
+      },
+      {
+        "pagePath": "pages/my/my",
+        "iconfont": {
+          "text": "\ue626",
+          "selectedText": "\ue626",
+          "fontSize": "16px",
+          "color": "@tabFontColor",
+          "selectedColor": "@tabSelectedColor"
+        },
+        "text": "个人中心"
+      }
+    ]
+  },
+  "easycom": {
+    "autoscan": true,
+    "custom": {
+      "^wd-(.*)": "wot-design-uni/components/wd-$1/wd-$1.vue"
+    }
+  },
+  "subPackages": []
+}
