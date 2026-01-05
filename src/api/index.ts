@@ -1,22 +1,54 @@
+import type { ErrorNotice, ServiceError } from '@/types/error'
+// import type { UniappRequestAdapter } from '@alova/adapter-uniapp'
+// import type vueHook from 'alova/vue'
 import AdapterUniapp from '@alova/adapter-uniapp'
 import { createAlova } from 'alova'
-import { ResponseCode, ResponseMessage } from '@/types/responseCode'
-import { getAccessToken, getExpireAt, refreshAccessToken } from '@/utils/tokenManager'
+// import { createClientTokenAuthentication } from 'alova/client'
+import { ResponseCode } from '@/types/responseCode'
+import { getAccessToken, isLoggedIn, refreshAccessToken } from '@/utils/tokenManager'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseKey = import.meta.env.VITE_SUPABASE_KEY
 
-const alovaInst = createAlova({
+export const alovaInst = createAlova({
   baseURL: supabaseUrl,
   timeout: 15000,
   ...AdapterUniapp(),
   beforeRequest: async (method) => {
     method.config.headers.apikey = supabaseKey
+    const { isSignedIn, expireAt } = isLoggedIn()
     if (!method.meta?.ignoreToken) {
-      const expireAt = getExpireAt()
-      // 检查 token 是否即将过期, getExpireAt() 为 null 时, 也刷新 token
-      if (expireAt === null || expireAt * 1000 < Date.now()) {
-        await refreshAccessToken()
+      if (!isSignedIn) {
+        try {
+          if (expireAt < 0) {
+            const error: ErrorNotice = {
+              code: ResponseCode.NOT_AUTHORIZED,
+              msg: {
+                stringCode: 'NOT_AUTHORIZED',
+                codeMsg: '未登录',
+              },
+              customMsg: '请先登录',
+              from: 'beforeRequest',
+            }
+            throw new Error(JSON.stringify(error))
+          }
+          const isSuccess = await refreshAccessToken()
+          if (!isSuccess) {
+            const error: ErrorNotice = {
+              code: ResponseCode.NOT_AUTHORIZED,
+              msg: {
+                stringCode: 'NOT_AUTHORIZED',
+                codeMsg: '登录过期',
+              },
+              customMsg: '请重新登录',
+              from: 'beforeRequest',
+            }
+            throw new Error(JSON.stringify(error))
+          }
+        }
+        catch (error) {
+          throw new Error(error instanceof Error ? error.message : String(error))
+        }
       }
       method.config.headers.Authorization = `Bearer ${getAccessToken()}`
     }
@@ -24,21 +56,36 @@ const alovaInst = createAlova({
   responded: {
     onSuccess: (response) => {
       const { statusCode, data } = response as UniNamespace.RequestSuccessCallbackResult
-      // 检查响应状态码是否为成功
-      if (statusCode === ResponseCode.SUCCESS) {
-        return data || null
+
+      // 检查响应状态码是否为200, 201, 204
+      if (statusCode >= 200 && statusCode < 300) {
+        return data
       }
+      const errorData = data as ServiceError
       // 根据错误状态码抛出异常
-      const errorMsg = ResponseMessage[statusCode as ResponseCode] || '未知错误'
-      throw new Error(errorMsg)
+      const errorMsg = errorData.msg
+      const errorNotice: ErrorNotice = {
+        code: errorData.code as ResponseCode | number,
+        msg: {
+          stringCode: errorData.error_code,
+          codeMsg: errorMsg,
+        },
+        customMsg: '',
+        from: '',
+      }
+      throw new Error(JSON.stringify(errorNotice))
     },
-    onError(error) {
-      uni.showToast({
-        title: '网络连接异常，请重试',
-        icon: 'none',
-      })
-      console.error('请求失败:', error)
-      throw error
+    onError() {
+      const errorNotice: ErrorNotice = {
+        code: ResponseCode.REQUEST_TIMEOUT,
+        msg: {
+          stringCode: 'REQUEST_TIMEOUT',
+          codeMsg: '请求超时或连接中断',
+        },
+        customMsg: '网络连接异常',
+        from: '',
+      }
+      throw new Error(JSON.stringify(errorNotice))
     },
   },
 
@@ -78,3 +125,12 @@ export const alovaPut = (url: string, data?: Record<string, any>, config?: Recor
  * @returns Promise<any>
  */
 export const alovaDelete = (url: string, data?: Record<string, any>, config?: Record<string, any>) => alovaInst.Delete(url, data, config)
+
+/**
+ * 发送 PATCH 请求
+ * @param url 请求 URL
+ * @param data 请求数据
+ * @param config 请求配置
+ * @returns Promise<any>
+ */
+export const alovaPatch = (url: string, data?: Record<string, any>, config?: Record<string, any>) => alovaInst.Patch(url, data, config)

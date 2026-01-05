@@ -4,7 +4,6 @@
   "description": "",
   "versionName": "1.0.0",
   "versionCode": "100",
-  "transformPx": false,
   "uniStatistics": {
     "enable": false
   },
@@ -12,11 +11,11 @@
     "usingComponents": true,
     "nvueStyleCompiler": "uni-app",
     "compilerVersion": 3,
+    "screenOrientation": ["portrait-primary"],
     "splashscreen": {
       "alwaysShowBeforeRender": true,
       "waiting": true,
-      "autoclose": true,
-      "delay": 0
+      "autoclose": true
     },
     "modules": {},
     "distribute": {
@@ -36,7 +35,13 @@
           "<uses-permission android:name=\"android.permission.WAKE_LOCK\"/>",
           "<uses-permission android:name=\"android.permission.FLASHLIGHT\"/>",
           "<uses-feature android:name=\"android.hardware.camera\"/>",
-          "<uses-permission android:name=\"android.permission.WRITE_SETTINGS\"/>"
+          "<uses-permission android:name=\"android.permission.WRITE_SETTINGS\"/>",
+          // 存储权限（安卓12及以下）
+          "<uses-permission android:name=\"android.permission.READ_EXTERNAL_STORAGE\"/>",
+          "<uses-permission android:name=\"android.permission.WRITE_EXTERNAL_STORAGE\"/>",
+          // 安卓13+的相册权限（单独配置，替代WRITE_EXTERNAL_STORAGE）
+          "<uses-permission android:name=\"android.permission.READ_MEDIA_IMAGES\"/>"
+
         ]
       },
       "ios": {},

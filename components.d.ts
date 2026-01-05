@@ -7,8 +7,7 @@ export {}
 
 declare module 'vue' {
   export interface GlobalComponents {
-    AppFooter: typeof import('./src/components/AppFooter.vue')['default']
-    AppLogos: typeof import('./src/components/AppLogos.vue')['default']
-    InputEntry: typeof import('./src/components/InputEntry.vue')['default']
+    CountdownJumpPopup: typeof import('./src/components/CountdownJumpPopup.vue')['default']
+    CustomPickerPopup: typeof import('./src/components/CustomPickerPopup.vue')['default']
   }
 }

@@ -1,17 +1,19 @@
-import type { Session, User, UserMetadata } from '@/types/authType'
-import { useAuthStore } from '@/stores/authStore'
-import { getRefreshToken, refreshAccessToken } from '@/utils/tokenManager'
+import type { Session, User, UserMetadata, VerifyAccountResponse } from '@/types/authType'
+import type { ErrorNotice } from '@/types/error'
+import { ResponseCode } from '@/types/responseCode'
+import { clearAuthData, getRefreshToken, refreshAccessToken } from '@/utils/tokenManager'
 import { alovaGet, alovaPost, alovaPut } from '../index'
 
 /**
  *  auth 接口基础 URL
  */
-const BASE_AUTH_URL = `${import.meta.env.VITE_SUPABASE_URL}/auth/v1`
+const BASE_AUTH_URL = `/auth/v1`
+const BASE_FUNCTION_URL = `/functions/v1`
 
 /**
  * 刷新 access token
  * @param refreshToken  刷新token令牌
- * @returns Promise<Session | undefined>
+ * @returns Promise<Session | null>
  */
 export async function refreshToken(refreshToken: string) {
   try {
@@ -27,14 +29,16 @@ export async function refreshToken(refreshToken: string) {
       params: {
         grant_type: 'refresh_token',
       },
-    })
-    if (response as any) {
-      return response as Session
-    }
+    }) as Session
+    return response ?? null
   }
   catch (error) {
-    const errorMsg = `执行: refreshToken 时异常  : ${(error as Error).message}`
-    throw new Error(errorMsg)
+    const errorNotice: ErrorNotice = JSON.parse((error as Error).message)
+    if (errorNotice.code !== ResponseCode.REQUEST_TIMEOUT) {
+      errorNotice.customMsg = `refresh token 失效`
+    }
+    errorNotice.from = 'refreshToken'
+    throw new Error(JSON.stringify(errorNotice))
   }
 }
 
@@ -54,8 +58,12 @@ export async function getUser() {
     }
   }
   catch (error) {
-    const errorMsg = `执行: getUserInfo 时异常  : ${(error as Error).message}`
-    throw new Error(errorMsg)
+    const errorNotice: ErrorNotice = JSON.parse((error as Error).message)
+    if (errorNotice.code !== ResponseCode.REQUEST_TIMEOUT) {
+      errorNotice.customMsg = `获取用户信息失败`
+    }
+    errorNotice.from = 'getUser'
+    throw new Error(JSON.stringify(errorNotice))
   }
 }
 
@@ -63,7 +71,7 @@ export async function getUser() {
  * 登录
  * @param email 邮箱
  * @param password 密码
- * @returns Promise<Session | undefined>
+ * @returns Promise<Session | null>
  */
 export async function loginWithPsd(email: string, password: string) {
   try {
@@ -80,18 +88,19 @@ export async function loginWithPsd(email: string, password: string) {
       params: {
         grant_type: 'password',
       },
-    })
-    if (response as any) {
-      const data = response as Session
-      // 登录成功后，更新 authStore 中的用户信息
-      const authStore = useAuthStore()
-      authStore.setAuth(data.access_token, data.refresh_token, data.user, data.expires_at)
-      return data
-    }
+    }) as Session
+    return response ?? null
   }
   catch (error) {
-    const errorMsg = `执行: loginWithPsd 时异常  : ${(error as Error).message}`
-    throw new Error(errorMsg)
+    const errorNotice: ErrorNotice = JSON.parse((error as Error).message)
+    if (errorNotice.code !== ResponseCode.REQUEST_TIMEOUT) {
+      errorNotice.customMsg = `登录失败`
+    }
+    if (errorNotice.code === ResponseCode.INVALID_REQUEST) {
+      errorNotice.customMsg = `登录失败，邮箱或密码错误`
+    }
+    errorNotice.from = 'loginWithPsd'
+    throw new Error(JSON.stringify(errorNotice))
   }
 }
 
@@ -121,8 +130,12 @@ export async function sendCode(email: string) {
     return false
   }
   catch (error) {
-    const errorMsg = `执行: sendCode 时异常  : ${(error as Error).message}`
-    throw new Error(errorMsg)
+    const errorNotice: ErrorNotice = JSON.parse((error as Error).message)
+    if (errorNotice.code !== ResponseCode.REQUEST_TIMEOUT) {
+      errorNotice.customMsg = `发送验证码失败`
+    }
+    errorNotice.from = 'sendCode'
+    throw new Error(JSON.stringify(errorNotice))
   }
 }
 
@@ -130,13 +143,13 @@ export async function sendCode(email: string) {
  * 验证码登录/注册---验证验证码
  * @param email 邮箱
  * @param code 验证码
- * @returns Promise<Session | undefined>
+ * @returns Promise<Session | null>
  */
 export async function verifyCode(email: string, code: string) {
   try {
     const response = await alovaPost(`${BASE_AUTH_URL}/verify`, {
-      email,
-      code,
+      email: email.trim(),
+      token: code.trim(),
       type: 'email',
     }, {
       headers: {
@@ -145,18 +158,16 @@ export async function verifyCode(email: string, code: string) {
       meta: {
         ignoreToken: true,
       },
-    }) as any
-    if (response) {
-      const data = response as Session
-      // 登录成功后，更新 authStore 中的用户信息
-      const authStore = useAuthStore()
-      authStore.setAuth(data.access_token, data.refresh_token, data.user, data.expires_at)
-      return data
-    }
+    }) as Session
+    return response ?? null
   }
   catch (error) {
-    const errorMsg = `执行: verifyCode 时异常  : ${(error as Error).message}`
-    throw new Error(errorMsg)
+    const errorNotice: ErrorNotice = JSON.parse((error as Error).message)
+    if (errorNotice.code !== ResponseCode.REQUEST_TIMEOUT) {
+      errorNotice.customMsg = `验证验证码失败`
+    }
+    errorNotice.from = 'verifyCode'
+    throw new Error(JSON.stringify(errorNotice))
   }
 }
 
@@ -178,13 +189,18 @@ export async function updatePassword(newPassword: string) {
       },
     }) as any
     if (response) {
+      // 修改完密码必须重新登录
       return await logout()
     }
     return false
   }
   catch (error) {
-    const errorMsg = `执行: updatePassword 时异常  : ${(error as Error).message}`
-    throw new Error(errorMsg)
+    const errorNotice: ErrorNotice = JSON.parse((error as Error).message)
+    if (errorNotice.code !== ResponseCode.REQUEST_TIMEOUT) {
+      errorNotice.customMsg = `更新密码失败`
+    }
+    errorNotice.from = 'updatePassword'
+    throw new Error(JSON.stringify(errorNotice))
   }
 }
 
@@ -205,16 +221,19 @@ export async function logout() {
       },
     }) as any
     if (response) {
-      // 注销成功后，清除 authStore 中的用户信息
-      const authStore = useAuthStore()
-      authStore.clearAuth()
+      // 清除登录信息
+      clearAuthData()
       return true
     }
     return false
   }
   catch (error) {
-    const errorMsg = `执行: logout 时异常  : ${(error as Error).message}`
-    throw new Error(errorMsg)
+    const errorNotice: ErrorNotice = JSON.parse((error as Error).message)
+    if (errorNotice.code !== ResponseCode.REQUEST_TIMEOUT) {
+      errorNotice.customMsg = `注销登录失败`
+    }
+    errorNotice.from = 'logout'
+    throw new Error(JSON.stringify(errorNotice))
   }
 }
 
@@ -236,12 +255,106 @@ export async function updateMetadata(metadata: UserMetadata) {
       },
     }) as any
     if (response) {
+      // 通过刷新 access token 来更新用户最新信息
       return await refreshAccessToken()
     }
     return false
   }
   catch (error) {
-    const errorMsg = `执行: updateMetadata 时异常  : ${(error as Error).message}`
-    throw new Error(errorMsg)
+    const errorNotice: ErrorNotice = JSON.parse((error as Error).message)
+    if (errorNotice.code !== ResponseCode.REQUEST_TIMEOUT) {
+      errorNotice.customMsg = `更新用户元数据失败`
+    }
+    errorNotice.from = 'updateMetadata'
+    throw new Error(JSON.stringify(errorNotice))
+  }
+}
+
+/**
+ * 用户名注册
+ * @param username 用户名
+ * @param password 密码
+ * @returns Promise<boolean>
+ */
+export async function registerByUsername(username: string, password: string) {
+  try {
+    const response = await alovaPost(`${BASE_FUNCTION_URL}/username-register`, {
+      type: 'username',
+      userInfo: {
+        username,
+        password,
+      },
+    }, {
+      headers: {
+        'Content-Type': 'application/json;charset=utf-8',
+      },
+      meta: {
+        ignoreToken: true,
+      },
+    }) as any
+    return !!response
+  }
+  catch (error) {
+    const errorNotice: ErrorNotice = JSON.parse((error as Error).message)
+    if (errorNotice.code !== ResponseCode.REQUEST_TIMEOUT) {
+      errorNotice.customMsg = `用户名注册失败`
+    }
+    errorNotice.from = 'registerByUsername'
+    throw new Error(JSON.stringify(errorNotice))
+  }
+}
+
+/**
+ * 账户验证
+ * @param account 邮箱或用户名
+ * @param type 验证类型，默认邮箱验证
+ * @returns Promise<boolean>
+ */
+export async function verifyAccount(account: string, type = 'email') {
+  try {
+    const response = await alovaPost(`${BASE_FUNCTION_URL}/check`, {
+      account,
+      type,
+    }, {
+      headers: {
+        'Content-Type': 'application/json;charset=utf-8',
+      },
+      meta: {
+        ignoreToken: true,
+      },
+    }) as VerifyAccountResponse
+    return response?.available ?? false
+  }
+  catch (error) {
+    const errorNotice: ErrorNotice = JSON.parse((error as Error).message)
+    if (errorNotice.code !== ResponseCode.REQUEST_TIMEOUT) {
+      errorNotice.customMsg = `账户验证失败`
+    }
+    errorNotice.from = 'verifyAccount'
+    throw new Error(JSON.stringify(errorNotice))
+  }
+}
+
+/**
+ * 邮箱注册-发送验证码
+ * @param account 邮箱
+ * @param type 注册类型，默认邮箱注册
+ * @returns Promise<boolean>
+ */
+export async function sendVerifyCode(account: string, type = 'email') {
+  try {
+    const isChecked = await verifyAccount(account, type)
+    if (isChecked) {
+      return await sendCode(account)
+    }
+    return false
+  }
+  catch (error) {
+    const errorNotice: ErrorNotice = JSON.parse((error as Error).message)
+    if (errorNotice.code !== ResponseCode.REQUEST_TIMEOUT) {
+      errorNotice.customMsg = `发送验证码失败`
+    }
+    errorNotice.from = 'sendVerifyCode'
+    throw new Error(JSON.stringify(errorNotice))
   }
 }

@@ -1,0 +1,39 @@
+// 颜色变量
+$blue-50: #f0f8ff;
+$blue-100: #dbeafe;
+$blue-500: #3b82f6;
+$blue-600: #2563eb;
+
+$gray-100: #f3f4f6;
+$gray-200: #e5e7eb;
+$gray-400: #9ca3af;
+$gray-500: #6b7280;
+$gray-600: #4b5563;
+$gray-700: #374151;
+$gray-800: #1f2937;
+
+$white: #ffffff;
+
+// 间距变量
+$spacing-xs: 4rpx;
+$spacing-sm: 8rpx;
+$spacing-md: 16rpx;
+$spacing-lg: 24rpx;
+$spacing-xl: 32rpx;
+$spacing-2xl: 48rpx;
+$spacing-3xl: 64rpx;
+
+// 圆角变量
+$radius-sm: 8rpx;
+$radius-md: 16rpx;
+$radius-lg: 24rpx;
+$radius-xl: 32rpx;
+$radius-2xl: 40rpx;
+$radius-3xl: 60rpx;
+
+// 阴影变量
+$shadow-sm: 0 1rpx 6rpx rgba(0, 0, 0, 0.1);
+$shadow-md: 0 4rpx 12rpx rgba(0, 0, 0, 0.1);
+$shadow-lg: 0 10rpx 30rpx rgba(0, 0, 0, 0.1);
+$shadow-xl: 0 20rpx 50rpx rgba(0, 0, 0, 0.1);
+$shadow-blue: 0 10rpx 30rpx rgba(59, 130, 246, 0.3);

@@ -1,32 +1,30 @@
 <script setup lang="ts">
-import type { Session } from '@/types/authType'
 import type { ErrorNotice } from '@/types/error'
 import { useRouter } from 'uni-mini-router'
 import { computed, ref } from 'vue'
 import { useToast } from 'wot-design-uni'
-import { loginWithPsd, sendCode, verifyCode } from '@/api/methods/user'
-import { useAuthStore } from '@/stores/auth'
-import { ResponseCode } from '@/types/responseCode'
+import { registerByUsername, sendVerifyCode, verifyCode } from '@/api/methods/user'
+import { ResponseCode, ResponseMessage } from '@/types/responseCode'
 
 const toast = useToast()
-const authStore = useAuthStore()
 const router = useRouter()
 
 // 定义登录模式类型
-type LoginMode = 'password' | 'code'
+type registerType = 'username' | 'email'
 
 // 响应式数据
-const loginMode = ref<LoginMode>('password') // 登录模式
+const registerMode = ref<registerType>('username') // 登录模式
 const account = ref<string>('') // 用户名/邮箱（密码登录）
 const email = ref<string>('') // 邮箱（验证码登录）
-const password = ref<string>('') // 密码
+const password = ref<string>('') // 密码（密码登录）
+const confirmPassword = ref<string>('') // 确认密码（密码登录）
 const code = ref<string>('') // 验证码
 const countdown = ref<number>(0) // 验证码倒计时
 const agreementChecked = ref<boolean>(false) // 协议勾选状态
 
 const sliderStyle = computed(() => {
   return {
-    transform: loginMode.value === 'password'
+    transform: registerMode.value === 'username'
       ? 'translateX(0)'
       : 'translateX(100%)',
   }
@@ -45,7 +43,7 @@ async function handleGetCode(): Promise<void> {
   // 验证通过后，发送验证码请求
   try {
     toast.loading('发送中...')
-    await sendCode(email.value)
+    await sendVerifyCode(email.value)
   }
   catch (error) {
     toast.error('发送验证码失败，请稍后重试')
@@ -65,13 +63,13 @@ async function handleGetCode(): Promise<void> {
   }, 1000)
 
   // 模拟发送验证码请求
-  toast.show('验证码已发送至您的邮箱，请注意查收')
+  toast.success('验证码已发送至您的邮箱，请注意查收')
 }
 
 /**
  * 登录处理
  */
-async function handleLogin(): Promise<void> {
+async function handleRegister(): Promise<void> {
   // 先验证输入，再显示loading
   if (!validateInputs()) {
     return
@@ -80,13 +78,16 @@ async function handleLogin(): Promise<void> {
   toast.loading('登录中...')
 
   try {
-    const session = await performLogin()
-
-    // 登录成功处理
-    await handleLoginSuccess(session)
+    const result = await performRegister()
+    if (result) {
+      toast.success('注册成功')
+      setTimeout(() => {
+        router.back()
+      }, 1500)
+    }
   }
   catch (error) {
-    handleLoginError(error)
+    handleRegisterError(error)
   }
   finally {
     toast.close()
@@ -101,28 +102,32 @@ function validateInputs(): boolean {
     return false
   }
 
-  if (loginMode.value === 'password') {
-    return validatePasswordInputs()
+  if (registerMode.value === 'username') {
+    return validateUsernameInputs()
   }
   else {
     return validateCodeInputs()
   }
 }
 
-function validatePasswordInputs(): boolean {
+function validateUsernameInputs(): boolean {
   if (!account.value) {
-    toast.error('请输入用户名或邮箱')
+    toast.error('请输入用户名')
     return false
   }
 
   // 邮箱格式验证
-  if (account.value.includes('@') && !validateEmail(account.value)) {
-    toast.error('请输入正确的邮箱地址')
+  if (account.value.includes('@')) {
+    toast.error('用户名不能包含邮箱格式')
     return false
   }
 
   if (!password.value) {
     toast.error('请输入密码')
+    return false
+  }
+  if (password.value !== confirmPassword.value) {
+    toast.error('两次输入密码不一致')
     return false
   }
 
@@ -148,46 +153,24 @@ function validateCodeInputs(): boolean {
   return true
 }
 
-// 执行登录
-async function performLogin(): Promise<Session> {
-  if (loginMode.value === 'password') {
-    // 处理账号格式
-    const accountForLogin = account.value.includes('@')
-      ? account.value
-      : `${account.value}@custom.com`
-
-    return await loginWithPsd(accountForLogin, password.value)
+// 执行注册
+async function performRegister(): Promise<boolean> {
+  if (registerMode.value === 'username') {
+    // 验证用户名输入不通过，直接返回false
+    if (!validateUsernameInputs()) {
+      return false
+    }
+    // 直接调用用户名注册方法（异常由你外部的处理逻辑承接）
+    return await registerByUsername(account.value, password.value)
   }
   else {
-    return await verifyCode(email.value, code.value)
-  }
-}
-
-// 登录成功处理
-async function handleLoginSuccess(session: Session): Promise<void> {
-  if (!session?.access_token) {
-    const errorNotice: ErrorNotice = {
-      code: ResponseCode.NOT_FOUND,
-      msg: {
-        stringCode: 'NOT_FOUND',
-        codeMsg: '资源不存在',
-      },
-      customMsg: '登录凭证缺失',
-      from: 'login',
+    // 验证验证码输入不通过，直接返回false
+    if (!validateCodeInputs()) {
+      return false
     }
-    throw new Error(JSON.stringify(errorNotice))
+    // 直接调用验证码验证方法并转为布尔值（异常由你外部的处理逻辑承接）
+    return Boolean(await verifyCode(email.value, code.value))
   }
-
-  authStore.setAuth(
-    session.access_token,
-    session.refresh_token,
-    session.user,
-    session.expires_at,
-  )
-
-  // 使用延迟跳转
-  await new Promise(resolve => setTimeout(resolve, 1500))
-  router.pushTab({ name: 'index' })
 }
 
 /**
@@ -197,7 +180,7 @@ function validateEmail(value: string): boolean {
   // 通用邮箱正则验证
   const reg = /^[\w.%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i
   // 密码登录时验证account（用户名/邮箱）：如果是邮箱则验证格式，用户名不做格式限制
-  if (loginMode.value === 'password') {
+  if (registerMode.value === 'username') {
     return value ? (value.includes('@') ? reg.test(value) : true) : false
   }
   // 验证码登录时验证email
@@ -205,33 +188,26 @@ function validateEmail(value: string): boolean {
 }
 
 // 错误处理
-function handleLoginError(error: any): void {
+function handleRegisterError(error: any): void {
   console.error('登录失败:', error)
   const errorNotice: ErrorNotice = JSON.parse(error.message)
   // 可以根据错误类型显示不同提示
-  if (errorNotice.code === ResponseCode.NOT_FOUND) {
-    toast.error(errorNotice.customMsg || '登录凭证缺失')
+  if (errorNotice.code >= ResponseCode.INTERNAL_ERROR) {
+    toast.error('服务器异常,请联系管理员!')
   }
   else if (errorNotice.code === ResponseCode.TOO_MANY_REQUESTS) {
     toast.error(errorNotice.customMsg || '请求频率过快')
   }
-  else if (errorNotice.code === ResponseCode.INVALID_REQUEST) {
-    toast.error(errorNotice.customMsg || '请求参数错误')
+  else if (ResponseMessage.keys.includes(errorNotice.msg.stringCode || '')) {
+    toast.error(ResponseMessage[errorNotice.msg.stringCode || ''] || '注册失败，请稍后重试')
   }
   else {
-    const errorMessage = loginMode.value === 'password'
-      ? '登录失败，请稍后重试'
-      : '验证码验证失败，请稍后重试'
+    const errorMessage = registerMode.value === 'username'
+      ? '用户名注册失败，请稍后重试'
+      : '邮箱注册失败，请稍后重试'
     toast.error(errorMessage)
   }
   throw error
-}
-
-/**
- * 立即注册
- */
-function handleRegister(): void {
-  router.push({ name: 'register' })
 }
 
 /**
@@ -251,51 +227,52 @@ function handlePrivacy(): void {
 
 <template>
   <wd-toast loading-color="#668DF8" />
-  <view class="login-page">
-    <!-- 顶部空区域 -->
-    <view style="height: 80rpx;" />
+  <view class="register-page">
+    <view class="back-btn-container">
+      <wd-icon name="arrow-left" size="30px" custom-class="back-btn" color="rgba(var(--base-white-rgb),0.8)" @click="router.back()" />
+    </view>
     <!-- 头部Logo区域 -->
-    <view class="login-header">
+    <view class="register-header">
       <!-- Logo容器 -->
       <view class="logo-box">
         <wd-icon class-prefix="icon" name="songhuozhong" size="48" color="rgba(var(--base-white-rgb),0.8)" />
       </view>
-      <text class="login-title">
-        欢迎登录
+      <text class="register-title">
+        用户注册
       </text>
-      <text class="login-subtitle">
-        请使用账户信息登录您的账户
+      <text class="register-subtitle">
+        请使用您的邮箱注册您的账户
       </text>
     </view>
 
     <!-- 登录表单区域 -->
-    <view class="login-form-wrap">
+    <view class="register-form-wrap">
       <view class="form-mode">
         <view class="switch-slider" :style="sliderStyle" />
         <view
           class="tab"
-          :class="{ active: loginMode === 'password' }"
-          @click="loginMode = 'password'"
+          :class="{ active: registerMode === 'username' }"
+          @click="registerMode = 'username'"
         >
-          密码登录
+          用户名注册
         </view>
         <view
           class="tab"
-          :class="{ active: loginMode === 'code' }"
-          @click="loginMode = 'code'"
+          :class="{ active: registerMode === 'email' }"
+          @click="registerMode = 'email'"
         >
-          验证码登录
+          邮箱注册
         </view>
       </view>
       <!-- 登录方式切换：添加动画过渡的外层容器 -->
 
-      <!-- 密码登录：用户名/邮箱输入框 -->
-      <view v-if="loginMode === 'password'" class="form-item">
+      <!-- 用户名注册：用户名 -->
+      <view v-if="registerMode === 'username'" class="form-item">
         <wd-input
           v-model="account"
           prefix-icon="user"
           type="text"
-          placeholder="请输入用户名或邮箱"
+          placeholder="请输入用户名"
           placeholder-style="font-size: 26rpx;"
           clearable
           custom-class="input-box"
@@ -303,8 +280,8 @@ function handlePrivacy(): void {
         />
       </view>
 
-      <!-- 验证码登录：邮箱输入框 -->
-      <view v-if="loginMode === 'code'" class="form-item">
+      <!-- 邮箱登录：邮箱输入框 -->
+      <view v-if="registerMode === 'email'" class="form-item">
         <wd-input
           v-model="email"
           prefix-icon="mail"
@@ -318,7 +295,7 @@ function handlePrivacy(): void {
       </view>
 
       <!-- 密码登录：密码输入框 -->
-      <view v-if="loginMode === 'password'" class="form-item">
+      <view v-if="registerMode === 'username'" class="form-item">
         <wd-input
           v-model="password"
           prefix-icon="lock-on"
@@ -332,8 +309,23 @@ function handlePrivacy(): void {
         />
       </view>
 
+      <!-- 密码登录：密码输入框 -->
+      <view v-if="registerMode === 'username'" class="form-item">
+        <wd-input
+          v-model="confirmPassword"
+          prefix-icon="lock-on"
+          type="nickname"
+          show-password
+          placeholder="请确认密码"
+          placeholder-style="font-size: 26rpx;"
+          clearable
+          custom-class="input-box"
+          no-border
+        />
+      </view>
+
       <!-- 验证码登录：验证码输入项 -->
-      <view v-if="loginMode === 'code'" class="form-item code-item">
+      <view v-if="registerMode === 'email'" class="form-item code-item">
         <wd-input
           v-model="code"
           prefix-icon="code"
@@ -357,23 +349,13 @@ function handlePrivacy(): void {
 
       <!-- 登录按钮 -->
       <wd-button
-        custom-class="login-btn"
+        custom-class="register-btn"
         style="height: 80rpx; border-radius: 24rpx; transition: all 0.2s ease;"
         block
-        @click="handleLogin"
+        @click="handleRegister"
       >
-        登录
+        完成注册
       </wd-button>
-
-      <!-- 注册入口 -->
-      <view class="register-wrap">
-        <text class="register-tip">
-          还没有账号？
-        </text>
-        <text class="link" style="font-size: 26rpx;" @click="handleRegister">
-          立即注册
-        </text>
-      </view>
 
       <!-- 用户协议勾选 -->
       <view class="agreement-wrap">
@@ -395,7 +377,7 @@ function handlePrivacy(): void {
 
 <style scoped lang="scss">
 /* 页面整体样式 */
-.login-page {
+.register-page {
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -404,8 +386,18 @@ function handlePrivacy(): void {
   box-sizing: border-box;
 }
 
+.back-btn-container {
+  height: 80rpx;
+}
+:deep(.back-btn) {
+  position: absolute;
+  top: 120rpx;
+  left: 35rpx;
+  z-index: 100;
+}
+
 /* 头部Logo区域 */
-.login-header {
+.register-header {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -425,20 +417,20 @@ function handlePrivacy(): void {
   box-shadow: 0 4rpx 12rpx rgba(var(--base-bg-color-rgb),0.5);
 }
 
-.login-title {
+.register-title {
   font-size: 32rpx;
   color: rgba(var(--base-white-rgb), 0.8);
   margin-bottom: 12rpx;
   font-weight: 500;
 }
 
-.login-subtitle {
+.register-subtitle {
   font-size: 24rpx;
   color: rgba(var(--base-white-rgb), 0.5);
 }
 
 /* 表单区域 */
-.login-form-wrap {
+.register-form-wrap {
   flex-grow: 1;
   background-color: var(--primary-bg-color);
   border-top-left-radius: 40rpx;
@@ -520,31 +512,10 @@ function handlePrivacy(): void {
 }
 
 /* 登录按钮 */
-:deep(.login-btn) {
+:deep(.register-btn) {
   margin-top: 50rpx;
   margin-bottom: 40rpx;
   box-shadow: var(--box-shadow-bottom);
-}
-
-/* 注册区域 */
-.register-wrap {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 60rpx;
-}
-
-.register-tip {
-  font-size: 26rpx;
-  color: var(--wot-color-secondary);
-  margin-right: 10rpx;
-}
-
-.register-btn {
-  font-size: 26rpx;
-  color: var(--theme-color);
-  padding: 0 !important;
-  height: auto !important;
 }
 
 /* 协议勾选区域 */

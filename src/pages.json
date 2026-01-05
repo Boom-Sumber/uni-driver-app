@@ -1,18 +1,12 @@
 {
   "pages": [
     {
-      "path": "pages/start/start",
-      "style": {
-        "navigationBarTitleText": "",
-        "navigationStyle": "custom"
-      },
-      "name": "start"
-    },
-    {
       "path": "pages/auth/login",
       "style": {
         "navigationBarTitleText": "",
-        "navigationStyle": "custom"
+        "navigationStyle": "custom",
+        "enablePullDownRefresh": false,
+        "navigationBarTextStyle": "white"
       },
       "name": "login"
     },
@@ -22,23 +16,22 @@
         "app-plus": {
           "titleNView": {
             "titleText": "首页",
-            "splitLine": {
-              "color": "#9b9b9b"
-            },
             "buttons": [
               {
                 "type": "none",
-                "fontSrc": "static/iconfont.ttf",
-                "text": "\ue626",
+                "fontSrc": "static/iconfont/iconfont.ttf",
+                "text": "",
                 "fontSize": "18px",
+                "fontWeight": "bold",
                 "color": "@navTxtStyle",
                 "float": "right"
               },
               {
                 "type": "none",
-                "fontSrc": "static/iconfont.ttf",
-                "text": "\ue6ec",
+                "fontSrc": "static/iconfont/iconfont.ttf",
+                "text": "",
                 "fontSize": "18px",
+                "fontWeight": "bold",
                 "color": "@navTxtStyle",
                 "float": "right"
               }
@@ -49,11 +42,26 @@
       "name": "index"
     },
     {
-      "path": "pages/insert/insert",
+      "path": "pages/upsert/upsert",
       "style": {
-        "navigationBarTitleText": "新增"
+        "enablePullDownRefresh": false,
+        "app-plus": {
+          "titleNView": {
+            "buttons": [
+              {
+                "type": "none",
+                "fontSrc": "static/iconfont/iconfont.ttf",
+                "text": "",
+                "fontSize": "18px",
+                "fontWeight": "bold",
+                "color": "@navTxtStyle",
+                "float": "right"
+              }
+            ]
+          }
+        }
       },
-      "name": "insert"
+      "name": "upsert"
     },
     {
       "path": "pages/my/my",
@@ -63,11 +71,11 @@
       "name": "my"
     },
     {
-      "path": "pages/tripManage/tripManage",
+      "path": "pages/tripManager/tripManager",
       "style": {
         "navigationBarTitleText": "行程管理"
       },
-      "name": "tripManage"
+      "name": "tripManager"
     },
     {
       "path": "pages/data/data",
@@ -75,38 +83,49 @@
         "navigationBarTitleText": "数据中心"
       },
       "name": "data"
+    },
+    {
+      "path": "pages/login/login",
+      "style": {
+        "navigationBarTitleText": "登录"
+      }
+    },
+    {
+      "path": "pages/register/register",
+      "style": {
+        "navigationBarTitleText": "",
+        "navigationStyle": "custom",
+        "enablePullDownRefresh": false,
+        "navigationBarTextStyle": "white"
+      },
+      "name": "register"
     }
   ],
   "globalStyle": {
-    "backgroundColor": "@bgColor",
-    "backgroundColorBottom": "@bgColorBottom",
-    "backgroundColorTop": "@bgColorTop",
-    "backgroundTextStyle": "light",
-    "navigationBarBackgroundColor": "white",
-    "navigationBarTextStyle": "@navTxtStyle",
     "enablePullDownRefresh": true,
+    "navigationBarTextStyle": "@navTxtStyle",
     "transparentTitle": "auto",
     "app-plus": {
       "titleNView": {
-        "backgroundColor": "#1296db"
+        "backgroundColor": "@navBgColor"
       },
       "pullToRefresh": {
-        "range": "50px"
+        "range": "20%"
       }
     }
   },
   "tabBar": {
     "color": "@tabFontColor",
-    "iconfontSrc": "static/iconfont.ttf",
+    "iconfontSrc": "static/iconfont/iconfont.ttf",
     "selectedColor": "@tabSelectedColor",
-    "backgroundColor": "white",
+    "backgroundColor": "@tabBgColor",
     "fontSize": "12px",
     "list": [
       {
         "pagePath": "pages/index",
         "iconfont": {
-          "text": "\ue602",
-          "selectedText": "\ue602",
+          "text": "",
+          "selectedText": "",
           "fontSize": "16px",
           "color": "@tabFontColor",
           "selectedColor": "@tabSelectedColor"
@@ -114,10 +133,10 @@
         "text": "首页"
       },
       {
-        "pagePath": "pages/tripManage/tripManage",
+        "pagePath": "pages/tripManager/tripManager",
         "iconfont": {
-          "text": "\ue640",
-          "selectedText": "\ue640",
+          "text": "",
+          "selectedText": "",
           "fontSize": "16px",
           "color": "@tabFontColor",
           "selectedColor": "@tabSelectedColor"
@@ -125,21 +144,10 @@
         "text": "行程管理"
       },
       {
-        "pagePath": "pages/insert/insert",
-        "iconfont": {
-          "text": "\ue60f",
-          "selectedText": "\ue60f",
-          "fontSize": "25px",
-          "color": "@tabFontColor",
-          "selectedColor": "@tabSelectedColor"
-        },
-        "text": ""
-      },
-      {
         "pagePath": "pages/data/data",
         "iconfont": {
-          "text": "\ue604",
-          "selectedText": "\ue604",
+          "text": "",
+          "selectedText": "",
           "fontSize": "16px",
           "color": "@tabFontColor",
           "selectedColor": "@tabSelectedColor"
@@ -149,13 +157,24 @@
       {
         "pagePath": "pages/my/my",
         "iconfont": {
-          "text": "\ue626",
-          "selectedText": "\ue626",
+          "text": "",
+          "selectedText": "",
           "fontSize": "16px",
           "color": "@tabFontColor",
           "selectedColor": "@tabSelectedColor"
         },
         "text": "个人中心"
+      },
+      {
+        "pagePath": "pages/login/login",
+        "iconfont": {
+          "text": "",
+          "selectedText": "",
+          "fontSize": "16px",
+          "color": "@tabFontColor",
+          "selectedColor": "@tabSelectedColor"
+        },
+        "text": "登录"
       }
     ]
   },
@@ -164,6 +183,5 @@
     "custom": {
       "^wd-(.*)": "wot-design-uni/components/wd-$1/wd-$1.vue"
     }
-  },
-  "subPackages": []
+  }
 }

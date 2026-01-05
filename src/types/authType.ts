@@ -30,3 +30,10 @@ export interface User {
   last_sign_in_at: Date
   user_metadata: UserMetadata
 }
+
+export interface VerifyAccountResponse {
+  code: number
+  request: string
+  available: boolean
+  type: string
+}
