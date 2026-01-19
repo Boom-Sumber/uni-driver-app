@@ -99,3 +99,31 @@ export async function editTrip(data: any, id: string) {
     throw new Error(JSON.stringify(errorNotice))
   }
 }
+
+/**
+ * 删除行程
+ * @param id 行程ID
+ * @returns 是否删除成功
+ */
+export async function deleteTrip(id: string) {
+  try {
+    return await updateData<Trip>(TABLE_NAME, {
+      is_deleted: true,
+    }, {
+      params: {
+        id: `eq.${id}`,
+      },
+    })
+  }
+  catch (error) {
+    const errorNotice: ErrorNotice = JSON.parse((error as Error).message)
+    if (errorNotice.code !== ResponseCode.REQUEST_TIMEOUT) {
+      errorNotice.customMsg = `删除行程失败`
+    }
+    if (errorNotice.code === ResponseCode.NOT_AUTHORIZED) {
+      errorNotice.customMsg = `用户未授权`
+    }
+    errorNotice.from = 'deleteTrip'
+    throw new Error(JSON.stringify(errorNotice))
+  }
+}

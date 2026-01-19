@@ -104,12 +104,21 @@ export function clearAuthData() {
  * isSignedIn: 是否已登录
  * expireAt: 过期时间戳
  */
-export function isLoggedIn(): { isSignedIn: boolean, expireAt: number } {
+export async function isLoggedIn(): Promise<{ isSignedIn: boolean, expireAt: number }> {
   try {
-    const token = getAccessToken()
     const expireAt = getExpireAt() ?? -1
+    if (expireAt * 1000 < Date.now()) {
+      const b = await refreshAccessToken()
+      if (!b) {
+        return { isSignedIn: false, expireAt: -1 }
+      }
+      else {
+        return { isSignedIn: true, expireAt: getExpireAt() ?? -1 }
+      }
+    }
+    const token = getAccessToken()
     const loginStatus = uni.getStorageSync(LOGIN_STATUS_KEY)
-    const isSignedIn = !!token && loginStatus === LOGIN_IN && expireAt * 1000 > Date.now()
+    const isSignedIn = !!token && loginStatus === LOGIN_IN
     return { isSignedIn, expireAt }
   }
   catch (error) {

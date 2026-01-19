@@ -1,15 +1,6 @@
 <script setup lang="ts">
 import { onError } from '@dcloudio/uni-app'
-import { useRouter } from 'uni-mini-router'
-import { onMounted } from 'vue'
 
-const router = useRouter()
-
-onMounted(async () => {
-  router.pushTab({
-    name: 'index',
-  })
-})
 onError((err) => {
   console.error('错误捕获', err)
 })

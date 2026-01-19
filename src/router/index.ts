@@ -12,7 +12,7 @@ const router = createRouter({
   routes: [...routes], // 路由表信息
 })
 router.beforeEach(async (to?: any, from?: any, next?: any) => {
-  const { isSignedIn, expireAt } = isLoggedIn()
+  const { isSignedIn, expireAt } = await isLoggedIn()
   if (ignorePaths.includes(to.path) || isSignedIn) {
     next()
   }

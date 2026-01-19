@@ -1,16 +1,6 @@
 {
   "pages": [
     {
-      "path": "pages/auth/login",
-      "style": {
-        "navigationBarTitleText": "",
-        "navigationStyle": "custom",
-        "enablePullDownRefresh": false,
-        "navigationBarTextStyle": "white"
-      },
-      "name": "login"
-    },
-    {
       "path": "pages/index",
       "style": {
         "app-plus": {
@@ -40,6 +30,16 @@
         }
       },
       "name": "index"
+    },
+    {
+      "path": "pages/auth/login",
+      "style": {
+        "navigationBarTitleText": "",
+        "navigationStyle": "custom",
+        "enablePullDownRefresh": false,
+        "navigationBarTextStyle": "white"
+      },
+      "name": "login"
     },
     {
       "path": "pages/upsert/upsert",
@@ -85,12 +85,6 @@
       "name": "data"
     },
     {
-      "path": "pages/login/login",
-      "style": {
-        "navigationBarTitleText": "登录"
-      }
-    },
-    {
       "path": "pages/register/register",
       "style": {
         "navigationBarTitleText": "",
@@ -99,6 +93,14 @@
         "navigationBarTextStyle": "white"
       },
       "name": "register"
+    },
+    {
+      "path": "pages/tripDetail/tripDetail",
+      "style": {
+        "enablePullDownRefresh": false,
+        "navigationBarTitleText": "行程详情"
+      },
+      "name": "tripDetail"
     }
   ],
   "globalStyle": {
@@ -164,17 +166,6 @@
           "selectedColor": "@tabSelectedColor"
         },
         "text": "个人中心"
-      },
-      {
-        "pagePath": "pages/login/login",
-        "iconfont": {
-          "text": "",
-          "selectedText": "",
-          "fontSize": "16px",
-          "color": "@tabFontColor",
-          "selectedColor": "@tabSelectedColor"
-        },
-        "text": "登录"
       }
     ]
   },

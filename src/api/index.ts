@@ -16,7 +16,7 @@ export const alovaInst = createAlova({
   ...AdapterUniapp(),
   beforeRequest: async (method) => {
     method.config.headers.apikey = supabaseKey
-    const { isSignedIn, expireAt } = isLoggedIn()
+    const { isSignedIn, expireAt } = await isLoggedIn()
     if (!method.meta?.ignoreToken) {
       if (!isSignedIn) {
         try {

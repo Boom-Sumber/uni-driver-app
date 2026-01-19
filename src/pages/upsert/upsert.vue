@@ -13,6 +13,7 @@ import { alovaInst } from '@/api/index'
 import { getEmployees } from '@/api/methods/empl'
 import { addTrip, editTrip, searchTrips } from '@/api/methods/trip'
 import { useIncrementalUpdate } from '@/composables/useIncrementalUpdate'
+import { useTripStore } from '@/stores/trip'
 import { debounceRef } from '@/utils/debounceRef'
 import { getImageOCR } from '@/utils/imageUtils'
 import { getUserInfo } from '@/utils/tokenManager'
@@ -21,6 +22,7 @@ const router = useRouter()
 const toast = useToast()
 const messageBox = useMessage()
 const ocrSlotMessage = useMessage('ocr-slot-message')
+const tripStore = useTripStore()
 
 const mode = ref<'add' | 'edit'>('add')
 const userInfo = getUserInfo()
@@ -30,7 +32,7 @@ const defaultTrip: Trip = {
   user_id: '',
   trip_date: dayjs().format('YYYY-MM-DD'),
   time_slot: '',
-  tracking_number: dayjs().format('YYYYMMDDHHmmss'),
+  tracking_number: '',
   highway_fee: 0,
   parking_fee: 0,
   other_fees: 0,
@@ -68,6 +70,10 @@ let incrementalUpdate: ReturnType<typeof useIncrementalUpdate<Trip>>
 
 const isInitialized = ref(false)
 
+// 用于获取method实例
+let startDate = ''
+let endDate = ''
+
 // 订单号输入框聚焦状态
 const trackingOrderFocus = ref(false)
 let isLoaded = false
@@ -85,7 +91,7 @@ const showTimeSlotPicker = ref(false)
 const defaultTimeSlot = ref([dayjs().subtract(1, 'hour').format('HH:mm'), dayjs().format('HH:mm')])
 
 function handleStartAndEndTimeConfirm({ value: [start, end] }: { value: [string, string] }) {
-  const timeSlot = `${start} - ${end}`
+  const timeSlot = `${start}-${end}`
   incrementalUpdate.formData.value.time_slot = timeSlot
   showTimeSlotPicker.value = false
 }
@@ -122,6 +128,7 @@ onNavigationBarButtonTap(async (e) => {
 
 // 页面加载
 onLoad(async (options) => {
+  toast.loading('加载中...')
   uni.$on('cameraError', (isError) => {
     if (isError) {
       toast.close()
@@ -129,8 +136,11 @@ onLoad(async (options) => {
     }
   })
   const routeMode = options?.mode as 'add' | 'edit'
-  if (routeMode)
+  if (routeMode) {
+    startDate = options?.startDate || ''
+    endDate = options?.endDate || ''
     mode.value = routeMode
+  }
 
   // 页面加载模式判断
   if (mode.value === 'edit' && options?.trip) {
@@ -147,7 +157,7 @@ onLoad(async (options) => {
       pageModel.value.highway_fee = trip.highway_fee
       pageModel.value.parking_fee = trip.parking_fee
       pageModel.value.other_fees = trip.other_fees
-      defaultTimeSlot.value = trip.time_slot.split(' - ')
+      defaultTimeSlot.value = trip.time_slot.split('-')
     }
     catch (error) {
       toast.error('行程数据格式错误')
@@ -158,6 +168,7 @@ onLoad(async (options) => {
     uni.setNavigationBarTitle({
       title: '新增行程',
     })
+    trackingNumber.value = getDatePlaceholder()
     if (userInfo) {
       initialData.value.user_id = userInfo.id
     }
@@ -177,7 +188,11 @@ onLoad(async (options) => {
     label: item.name,
     disabled: false,
   }))
+  // 初始化行程列表
+  await tripStore.initTrips(startDate, endDate)
+  onAddTripInitFrom()
   isLoaded = true
+  toast.close()
 })
 
 watch(() => trackingOrderFocus.value, async (newValue) => {
@@ -199,6 +214,21 @@ watch(() => trackingOrderFocus.value, async (newValue) => {
     }
   }
 })
+// 新增行程初始化 起点
+function onAddTripInitFrom() {
+  if (!incrementalUpdate)
+    return
+  if (mode.value === 'add') {
+    const trips = tripStore.getTrips(startDate, endDate)
+    const currentDataTrip = trips.filter(item => item.trip_date === dayjs(defaultDate.value).format('YYYY-MM-DD'))
+    if (currentDataTrip.length > 0) {
+      incrementalUpdate.formData.value.start_location = currentDataTrip[currentDataTrip.length - 1].end_location
+    }
+    else {
+      incrementalUpdate.formData.value.start_location = '工厂'
+    }
+  }
+}
 
 // 初始化增量更新
 function initializeIncrementalUpdate() {
@@ -226,8 +256,16 @@ function handleDateConfirm(event: any) {
     incrementalUpdate.formData.value.trip_date = dayjs().format('YYYY-MM-DD')
     return
   }
-  incrementalUpdate.formData.value.trip_date = event.value
+  incrementalUpdate.formData.value.trip_date = dayjs(event.value).format('YYYY-MM-DD')
   showDatePicker.value = false
+  tripStore.initTrips(startDate, endDate).then(() => {
+    onAddTripInitFrom()
+  })
+}
+// 订单号输入框占位符
+function getDatePlaceholder(): string {
+  const currentTimeNummber = Date.now() - dayjs().startOf('day').valueOf()
+  return dayjs(dayjs(defaultDate.value).startOf('day').valueOf() + currentTimeNummber).format('YYYYMMDDHHmmss')
 }
 
 // 跟单人员选择器确认事件
@@ -275,11 +313,13 @@ async function updateCache(targetMethod: any, data: Trip | null, updater: (cache
 
   if (!cacheData || !Array.isArray(cacheData) || cacheData.length === 0) {
     await setCache(targetMethod, data ? [data] : [])
-    return
   }
-
-  const updatedCache = updater(cacheData, data)
-  await setCache(targetMethod, updatedCache)
+  else {
+    const updatedCache = updater(cacheData, data)
+    await setCache(targetMethod, updatedCache)
+  }
+  // 刷新行程列表
+  uni.$emit('refreshTripList', { isRefresh: true })
 }
 
 // 添加操作配置
@@ -372,15 +412,20 @@ async function saveTrip() {
   })
 
   setTimeout(async () => {
-    const methodSnapshot = alovaInst.snapshots.match(`trip_${incrementalUpdate.formData.value.trip_date}`, true)
+    const methodSnapshot = alovaInst.snapshots.match(`trip_${startDate}_${endDate}`, true)
     const isCacheExist = !!methodSnapshot
     const targetMethod = isCacheExist ? (Array.isArray(methodSnapshot) ? methodSnapshot[0] : methodSnapshot) : null
+
+    if (!targetMethod) {
+      toast.error({ msg: '目标方法不存在', duration: 2000 })
+      throw new Error('目标alova实例不存在')
+    }
 
     let result: Trip | null = null
     const operationKey = mode.value === 'add' ? 'addTrip' : 'editTrip'
 
     if (mode.value === 'add') {
-      const { id, created_at, updated_at, is_deleted, deleted_at, ...insertData } = incrementalUpdate?.formData.value
+      const { id, created_at, updated_at, is_deleted, deleted_at, trip_expand, ...insertData } = incrementalUpdate?.formData.value
       result = await addTrip(insertData)
     }
     else if (mode.value === 'edit') {
@@ -511,7 +556,7 @@ async function handleImageConfirm(value: string) {
           <wd-input
             v-model="trackingNumber"
             label="送货订单"
-            :placeholder="dayjs().format('YYYYMMDDHHmmss')"
+            :placeholder="getDatePlaceholder()"
             clearable
             clear-trigger="focus"
             custom-class="required-field"
@@ -523,6 +568,8 @@ async function handleImageConfirm(value: string) {
             v-model="defaultDate"
             v-model:visible="showDatePicker"
             label="行程日期"
+            :min-date="dayjs(startDate).valueOf()"
+            :max-date="dayjs(endDate).valueOf()"
             align-right
             marker-side="after"
             custom-class="required-field"

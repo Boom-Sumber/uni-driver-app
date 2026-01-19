@@ -7,7 +7,6 @@ import {
   getExpireAt,
   getRefreshToken,
   getUserInfo,
-  isLoggedIn,
   setAuthData,
 } from '@/utils/tokenManager'
 
@@ -17,7 +16,6 @@ export const useAuthStore = defineStore('auth', {
     refreshToken: getRefreshToken(),
     user: getUserInfo(),
     expireAt: getExpireAt(),
-    isAuthenticated: isLoggedIn().isSignedIn,
   }),
 
   actions: {
@@ -29,7 +27,6 @@ export const useAuthStore = defineStore('auth', {
       this.refreshToken = refreshToken
       this.user = user
       this.expireAt = expiresAt
-      this.isAuthenticated = true
       setAuthData(accessToken, refreshToken, user, expiresAt)
     },
 
@@ -41,7 +38,6 @@ export const useAuthStore = defineStore('auth', {
       this.refreshToken = null
       this.user = null
       this.expireAt = null
-      this.isAuthenticated = false
       clearAuthData()
     },
 

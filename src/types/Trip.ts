@@ -18,5 +18,11 @@ export interface Trip {
   deleted_at?: string | null // 软删除时间（UTC 时间字符串，可选）
   created_at: string // 创建时间（UTC 时间字符串：'YYYY-MM-DDTHH:mm:ssZ'）
   updated_at: string // 更新时间（同上）
+  trip_expand?: TripExpand // 行程扩展信息（可选字段）
   [key: string]: unknown
+}
+
+export interface TripExpand {
+  calculate_fee: number // 核算金额
+  is_calculate: boolean // 是否已核算
 }

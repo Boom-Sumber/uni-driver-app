@@ -1,21 +1,21 @@
 <script setup lang="ts">
 import type { CalendarInstance } from 'wot-design-uni/components/wd-calendar/types'
 import type { Employee } from '@/types/empl.ts'
-import type { Trip } from '@/types/trip'
+import type { Trip, TripExpand } from '@/types/trip'
 import { onLoad, onNavigationBarButtonTap, onPullDownRefresh } from '@dcloudio/uni-app'
 import { useRouter } from 'uni-mini-router'
-import { ref, watch } from 'vue'
+import { ref } from 'vue'
 import { dayjs } from 'wot-design-uni'
 import { getEmployees } from '@/api/methods/empl'
-import { searchTrips } from '@/api/methods/trip'
 import CountdownJumpPopup from '@/components/CountdownJumpPopup.vue'
-import { useCacheVersionStore } from '@/stores/cacheVersion'
+import { useTripStore } from '@/stores/trip'
+import { isLoggedIn } from '@/utils/tokenManager'
 
 const showPopup = ref(false)
 // 路由实例
 const router = useRouter()
 
-const cacheVersionStore = useCacheVersionStore()
+const tripStore = useTripStore()
 
 // 日历组件实例
 const calendarRef = ref<CalendarInstance>()
@@ -26,41 +26,50 @@ const cardTitle = ref('')
 // 今日行程数据
 const todayTrips = ref<Trip[]>([])
 
-const isRefreshing = ref(false)
-
 const empl_list = ref<Employee[]>([])
+
+const startDate = dayjs().subtract(1, 'month').valueOf()
+const endDate = dayjs().valueOf()
 
 // 路由跳转方法
 const goToTrips = () => router.pushTab({ name: 'tripManager' })
-const goToAddTrip = () => router.push({ name: 'upsert', params: { mode: 'add' } })
+const goToAddTrip = () => router.push({ name: 'upsert', params: { mode: 'add', startDate: dayjs(startDate).format('YYYY-MM-DD'), endDate: dayjs(endDate).format('YYYY-MM-DD') } })
 
 // 日期选择器改变事件
-function handleCalendarconfirm({ value }: { value: number }) {
+async function handleCalendarconfirm({ value }: { value: number }) {
   // dateValue.value = value
+  await loadTrips(value)
   cardTitle.value = formatTitle(value)
   calendarRef.value?.close()
 }
 
 onLoad(async () => {
+  const { isSignedIn } = await isLoggedIn()
+  if (!isSignedIn) {
+    showPopup.value = true
+    return
+  }
   // 监听tabBar点击事件
   uni.$on('jumpToLogin', (pause) => {
     if (pause) {
       showPopup.value = true
     }
   })
-  uni.$on('refreshTripList', async () => {
-    await loadTrips()
+  uni.$on('refreshTripList', async (o) => {
+    if (o?.isRefresh) {
+      await loadTrips()
+    }
   })
   empl_list.value = await getEmployees()
   cardTitle.value = formatTitle(dateValue.value)
-  await loadTrips()
+  loadTrips()
 })
 
 onPullDownRefresh(() => {
-  isRefreshing.value = true
   setTimeout(async () => {
     await loadTrips()
   }, 1000)
+  uni.stopPullDownRefresh()
 })
 // 导航栏按钮点击事件
 onNavigationBarButtonTap((e) => {
@@ -72,42 +81,11 @@ onNavigationBarButtonTap((e) => {
     calendarRef.value?.open()
   }
 })
-watch(dateValue, async (newValue, oldValue) => {
-  if (newValue !== oldValue) {
-    await loadTrips(newValue)
-  }
-})
 
-function editTrip(trip: Trip) {
-  return router.push({ name: 'upsert', params: { mode: 'edit', trip: JSON.stringify(trip) } })
-}
-
-async function loadTrips(seachDate?: number) {
-  const cacheExpire = dayjs(new Date().setHours(23, 59, 59, 999)).valueOf()
-  const seachParam = dayjs(seachDate || dateValue.value).format('YYYY-MM-DD')
-  const config = {
-    // 通过name获取请求的method实例
-    params: {
-      trip_date: `eq.${seachParam}`,
-      // 排序 按创建时间降序
-      order: 'created_at.desc',
-    },
-    name: `trip_${seachParam}`,
-    cacheFor: {
-      // 设置缓存模式为持久化模式
-      mode: 'restore',
-      // 设置缓存时间为当天23:59:59.999
-      expire: cacheExpire,
-      tag: cacheVersionStore.generateCacheKey(`trip_${seachParam}`),
-    },
-  }
-  const trips = await searchTrips(config)
-  todayTrips.value = trips || []
-
-  if (isRefreshing.value) {
-    uni.stopPullDownRefresh()
-    isRefreshing.value = false
-  }
+async function loadTrips(seachDate: number = dateValue.value) {
+  await tripStore.initTrips(dayjs(startDate).format('YYYY-MM-DD'), dayjs(endDate).format('YYYY-MM-DD'))
+  const trips = tripStore.getTrips(dayjs(startDate).format('YYYY-MM-DD'), dayjs(endDate).format('YYYY-MM-DD'))
+  todayTrips.value = trips?.filter(trip => trip.trip_date === dayjs(seachDate).format('YYYY-MM-DD')) || []
 }
 
 // 格式化卡片标题,判断是不是今天,如果是今天,则添加(今日)后缀
@@ -116,6 +94,13 @@ function formatTitle(timestamp: number): string {
   const selectedDate = dayjs(timestamp).format('YYYY-MM-DD')
 
   return selectedDate === currentDate ? `${selectedDate}(今日)` : selectedDate
+}
+function handleTripClick(trip: Trip) {
+  router.push({ name: 'tripDetail', params: { trip: JSON.stringify(trip), startDate: dayjs(startDate).format('YYYY-MM-DD'), endDate: dayjs(endDate).format('YYYY-MM-DD') } })
+}
+// 新增：获取边框颜色的函数
+function getBorderColor(trip: Trip): string {
+  return (trip.trips_expand as TripExpand)?.is_calculate ? '#07c160' : '#ff4949'
 }
 </script>
 
@@ -128,8 +113,8 @@ function formatTitle(timestamp: number): string {
   <wd-calendar
     ref="calendarRef"
     v-model="dateValue"
-    :min-date="dayjs().subtract(1, 'month').valueOf()"
-    :max-date="dayjs().valueOf()"
+    :min-date="startDate"
+    :max-date="endDate"
     :with-cell="false"
     @confirm="handleCalendarconfirm"
   />
@@ -167,6 +152,8 @@ function formatTitle(timestamp: number): string {
             v-for="(trip, index) in todayTrips"
             :key="index"
             class="trip-item"
+            :style="{ borderLeftColor: getBorderColor(trip) }"
+            @click="handleTripClick(trip)"
           >
             <view class="trip-header">
               <text class="trip-title">
@@ -176,9 +163,12 @@ function formatTitle(timestamp: number): string {
                 {{ trip.time_slot }}
               </text>
             </view>
-            <text class="trip-route">
-              {{ trip.start_location }} → {{ trip.end_location }}
-            </text>
+            <view class="trip-route-row">
+              <text class="trip-route">
+                {{ trip.start_location }} → {{ trip.end_location }}
+              </text>
+            </view>
+
             <view class="trip-details">
               <view class="trip-detail">
                 <wd-icon class-prefix="icon" name="daolu" size="14" custom-class="detail-icon" />
@@ -190,11 +180,18 @@ function formatTitle(timestamp: number): string {
               </view>
               <view class="trip-detail">
                 <wd-icon class-prefix="icon" name="feiyongguanli" size="14" custom-class="detail-icon" />
-                <text>费用: ¥{{ trip.highway_fee + trip.parking_fee + trip.other_fees }}</text>
+                <text>费用: ¥{{ (trip.highway_fee + trip.parking_fee + trip.other_fees).toFixed(2) }}</text>
               </view>
-              <view class="trip-detail edit-action" @click="editTrip(trip)">
-                <wd-icon class-prefix="icon" name="bianji" color="var(--theme-color)" size="14" custom-class="detail-icon" />
-                <text>编辑</text>
+              <view class="trip-detail">
+                <view
+                  class="trip-status"
+                  :style="{
+                    borderColor: getBorderColor(trip),
+                    color: getBorderColor(trip),
+                  }"
+                >
+                  {{ (trip.trips_expand as TripExpand)?.is_calculate ? '已核算' : '未核算' }}
+                </view>
               </view>
             </view>
           </view>
@@ -279,14 +276,15 @@ function formatTitle(timestamp: number): string {
 // 行程列表样式 (scroll-view)
 .trip-list {
   width: 100%;
-  height: 500rpx; /* 关键：给 scroll-view 设定固定高度 */
+  height: 520rpx; /* 关键：给 scroll-view 设定固定高度 */
   padding-top: 10rpx;
   padding-bottom: 20rpx;
 }
 
 .trip-item {
-  border-left: 10rpx solid var(--theme-color);
-  padding-left: 20rpx;
+  border-left: 10rpx solid;
+  border-radius: 16rpx;
+  padding: 20rpx;
   margin-bottom: 30rpx;
   padding-bottom: 10rpx;
 
@@ -307,12 +305,17 @@ function formatTitle(timestamp: number): string {
       font-size: 24rpx;
     }
   }
-
-  .trip-route {
-    color: var(--wot-color-secondary);
-    font-size: 28rpx;
+  .trip-route-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     margin-bottom: 15rpx;
-    display: block;
+
+    .trip-route {
+      color: var(--wot-color-secondary);
+      font-size: 28rpx;
+      flex: 1;
+    }
   }
 
   .trip-details {
@@ -330,8 +333,13 @@ function formatTitle(timestamp: number): string {
         margin-right: 12rpx;
       }
 
-      &.edit-action {
-        color: var(--theme-color);
+      .trip-status {
+        font-size: 22rpx;
+        padding: 4rpx 12rpx;
+        border: 2rpx solid;
+        border-radius: 8rpx;
+        white-space: nowrap;
+        margin-left: 60rpx;
       }
     }
   }

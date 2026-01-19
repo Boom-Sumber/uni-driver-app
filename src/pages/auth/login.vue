@@ -184,7 +184,6 @@ async function handleLoginSuccess(session: Session): Promise<void> {
     session.user,
     session.expires_at,
   )
-
   // 使用延迟跳转
   await new Promise(resolve => setTimeout(resolve, 1500))
   router.pushTab({ name: 'index' })

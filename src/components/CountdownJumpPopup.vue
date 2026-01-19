@@ -51,7 +51,14 @@ function initCountdown() {
     }
   }, 1000)
 }
-
+function handlePopupModelUpdate(newVal: boolean) {
+  // 向父组件发送更新 modelValue 的事件
+  emit('update:modelValue', newVal)
+  // 弹窗关闭时清除定时器（兜底处理）
+  if (!newVal) {
+    countdownTimer && clearInterval(countdownTimer)
+  }
+}
 // APP 端路由跳转
 function handleJump() {
   const { routeType, routerName } = props
@@ -102,6 +109,12 @@ onUnmounted(() => {
 watch(
   () => props.modelValue,
   (newVal) => {
+    if (newVal) {
+      uni.hideTabBar()
+    }
+    else {
+      uni.showTabBar()
+    }
     newVal ? initCountdown() : (countdownTimer && clearInterval(countdownTimer))
   },
   { immediate: true },
@@ -121,13 +134,14 @@ watch(
 <template>
   <!-- 仅保留 WOT UI Popup 核心，移除多端 page-meta -->
   <wd-popup
-    v-model="modelValue"
+    :model-value="modelValue"
     v-bind="$attrs"
     :safe-area-inset-bottom="true"
     :closable="closable"
     :close-on-click-modal="closeOnClickModal"
     :lock-scroll="true"
     custom-style="border-radius: 32rpx;width: 80%;"
+    @update:model-value="handlePopupModelUpdate"
     @close="handleClose"
     @click-modal="handleModalClick"
   >
