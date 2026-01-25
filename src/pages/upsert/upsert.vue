@@ -1,31 +1,28 @@
 <script setup lang="ts">
 import type { SelectorType } from '@/types/common'
+import type { Employee } from '@/types/empl'
 import type { ErrorNotice } from '@/types/error'
 import type { OCRData } from '@/types/ocr'
 import type { Trip } from '@/types/trip'
 import type { ImageSourceType } from '@/utils/imageUtils'
 import { onLoad, onNavigationBarButtonTap } from '@dcloudio/uni-app'
-import { queryCache, setCache } from 'alova'
 import { useRouter } from 'uni-mini-router'
 import { computed, ref, watch } from 'vue'
 import { dayjs, useMessage, useToast } from 'wot-design-uni'
-import { alovaInst } from '@/api/index'
-import { getEmployees } from '@/api/methods/empl'
-import { addTrip, editTrip, searchTrips } from '@/api/methods/trip'
+import { getEmployees } from '@/apis/methods/employee'
+import { addTrip, editTrip, searchTripsByDateRange } from '@/apis/methods/trip'
 import { useIncrementalUpdate } from '@/composables/useIncrementalUpdate'
-import { useTripStore } from '@/stores/trip'
 import { debounceRef } from '@/utils/debounceRef'
 import { getImageOCR } from '@/utils/imageUtils'
-import { getUserInfo } from '@/utils/tokenManager'
+import { setStorage } from '@/utils/storage'
 
 const router = useRouter()
 const toast = useToast()
 const messageBox = useMessage()
 const ocrSlotMessage = useMessage('ocr-slot-message')
-const tripStore = useTripStore()
 
 const mode = ref<'add' | 'edit'>('add')
-const userInfo = getUserInfo()
+const userInfo = uni.getStorageSync('app_user')
 // 定义完整的 Trip 默认值
 const defaultTrip: Trip = {
   id: '',
@@ -73,6 +70,7 @@ const isInitialized = ref(false)
 // 用于获取method实例
 let startDate = ''
 let endDate = ''
+let trips: Trip[] = []
 
 // 订单号输入框聚焦状态
 const trackingOrderFocus = ref(false)
@@ -117,11 +115,6 @@ const totalFee = computed(() => {
  */
 onNavigationBarButtonTap(async (e) => {
   if (e.index === 0) {
-    // const methodSnapshot = alovaInst.snapshots.match(`trip_2025-12-06`, true)
-    // const cachedData = methodSnapshot ? await queryCache(methodSnapshot[0]) : undefined
-    // console.log('methodSnapshot', methodSnapshot)
-    // console.log('cachedData', cachedData)
-    // toast.success('这里OCR识别')
     showImagePicker.value = true
   }
 })
@@ -182,14 +175,14 @@ onLoad(async (options) => {
   handleStartAndEndTimeConfirm({ value: defaultTimeSlot.value as [string, string] })
 
   // 初始化员工列表  必须在初始化增量更新之后
-  const employees = await getEmployees()
+  const employees: Employee[] = await getEmployees()
   empl_list.value = employees.map(item => ({
     value: item.id,
     label: item.name,
     disabled: false,
   }))
   // 初始化行程列表
-  await tripStore.initTrips(startDate, endDate)
+  trips = await searchTripsByDateRange(startDate, endDate)
   onAddTripInitFrom()
   isLoaded = true
   toast.close()
@@ -198,12 +191,6 @@ onLoad(async (options) => {
 watch(() => trackingOrderFocus.value, async (newValue) => {
   if (!newValue && isLoaded && trackingNumber.value && trackingNumber.value.length > 0) {
     incrementalUpdate.formData.value.tracking_number = trackingNumber.value
-    const config = {
-      params: {
-        tracking_number: `eq.${trackingNumber.value}`,
-      },
-    }
-    const trips = await searchTrips(config)
     if (trips.length > 0) {
       incrementalUpdate.formData.value.start_location = trips[0].start_location
       incrementalUpdate.formData.value.end_location = trips[0].end_location
@@ -214,12 +201,11 @@ watch(() => trackingOrderFocus.value, async (newValue) => {
     }
   }
 })
-// 新增行程初始化 起点
+// 新增行程初始化起点
 function onAddTripInitFrom() {
   if (!incrementalUpdate)
     return
   if (mode.value === 'add') {
-    const trips = tripStore.getTrips(startDate, endDate)
     const currentDataTrip = trips.filter(item => item.trip_date === dayjs(defaultDate.value).format('YYYY-MM-DD'))
     if (currentDataTrip.length > 0) {
       incrementalUpdate.formData.value.start_location = currentDataTrip[currentDataTrip.length - 1].end_location
@@ -258,9 +244,7 @@ function handleDateConfirm(event: any) {
   }
   incrementalUpdate.formData.value.trip_date = dayjs(event.value).format('YYYY-MM-DD')
   showDatePicker.value = false
-  tripStore.initTrips(startDate, endDate).then(() => {
-    onAddTripInitFrom()
-  })
+  onAddTripInitFrom()
 }
 // 订单号输入框占位符
 function getDatePlaceholder(): string {
@@ -289,7 +273,7 @@ function isEmpty(value: unknown): boolean {
   return Object.keys(value).length === 0
 }
 
-type CallbackFunc = (isCacheExist: boolean, targetMethod: any, data: Trip | null) => Promise<void>
+type CallbackFunc = (data: Trip | null) => Promise<void>
 interface OperationConfig {
   cacheUpdater: (oldCache: Trip[], data: Trip | null) => Trip[]
   onSuccess: () => void | Promise<void>
@@ -308,18 +292,17 @@ function handleCacheError(err: unknown, from: string): never {
 }
 
 // 通用缓存更新函数
-async function updateCache(targetMethod: any, data: Trip | null, updater: (cache: Trip[], data: Trip | null) => Trip[]) {
-  const cacheData = await queryCache(targetMethod) as Trip[]
-
-  if (!cacheData || !Array.isArray(cacheData) || cacheData.length === 0) {
-    await setCache(targetMethod, data ? [data] : [])
+async function updateCache(data: Trip | null, updater: (cache: Trip[], data: Trip | null) => Trip[]) {
+  const cacheExpire = dayjs().endOf('day').valueOf()
+  if (!trips || !Array.isArray(trips) || trips.length === 0) {
+    setStorage(`trip_${startDate}_${endDate}`, [data], cacheExpire)
   }
   else {
-    const updatedCache = updater(cacheData, data)
-    await setCache(targetMethod, updatedCache)
+    const updatedCache = updater(trips, data)
+    setStorage(`trip_${startDate}_${endDate}`, updatedCache, cacheExpire)
   }
   // 刷新行程列表
-  uni.$emit('refreshTripList', { isRefresh: true })
+  uni.$emit('refreshTripList', { startDate, endDate })
 }
 
 // 添加操作配置
@@ -349,7 +332,8 @@ const addTripConfig: OperationConfig = {
         showTimeSlotPicker.value = false
       })
       .catch(() => {
-        router.back()
+        const a = getCurrentPages()
+        router.back({ animationType: 'slide-out-right', delta: a.length - 1 })
       })
     toast.close()
   },
@@ -370,19 +354,17 @@ const editTripConfig: OperationConfig = {
       duration: 2000,
     })
     setTimeout(() => {
-      router.back()
+      const a = getCurrentPages()
+      router.back({ animationType: 'slide-out-right', delta: a.length - 1 })
     }, 2000)
   },
 }
 
 // 通用的缓存处理器
 function createCacheHandler(config: OperationConfig): CallbackFunc {
-  return async (isCacheExist, targetMethod, data) => {
-    if (!isCacheExist || !targetMethod)
-      return
-
+  return async (data) => {
     try {
-      await updateCache(targetMethod, data, config.cacheUpdater)
+      await updateCache(data, config.cacheUpdater)
       MsgVisibleWithBtnShow.value = true
       toast.close()
       await config.onSuccess()
@@ -412,15 +394,6 @@ async function saveTrip() {
   })
 
   setTimeout(async () => {
-    const methodSnapshot = alovaInst.snapshots.match(`trip_${startDate}_${endDate}`, true)
-    const isCacheExist = !!methodSnapshot
-    const targetMethod = isCacheExist ? (Array.isArray(methodSnapshot) ? methodSnapshot[0] : methodSnapshot) : null
-
-    if (!targetMethod) {
-      toast.error({ msg: '目标方法不存在', duration: 2000 })
-      throw new Error('目标alova实例不存在')
-    }
-
     let result: Trip | null = null
     const operationKey = mode.value === 'add' ? 'addTrip' : 'editTrip'
 
@@ -438,7 +411,7 @@ async function saveTrip() {
 
     const operation = operationMap.get(operationKey)
     if (operation) {
-      await operation(isCacheExist, targetMethod, result)
+      await operation(result)
     }
   }, 1000)
 }

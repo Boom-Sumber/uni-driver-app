@@ -1,5 +1,126 @@
 <script setup lang="ts">
-import { onError } from '@dcloudio/uni-app'
+import { onError, onHide, onShow } from '@dcloudio/uni-app'
+import { onMounted, ref } from 'vue'
+import { dayjs } from 'wot-design-uni'
+import { getUser, refreshToken } from '@/apis/methods/auth'
+import { getEmployees } from '@/apis/methods/employee'
+import { searchTripsByDateRange } from './apis/methods/trip'
+import { useAppStartStore } from './stores/appStart'
+import { getStorage, removeStorageWithPrefixKey, setStorage } from './utils/storage'
+
+const appStartStore = useAppStartStore()
+
+const refreshTimer = ref<any>()
+const endDate = dayjs().format('YYYY-MM-DD')
+const startDate = dayjs().subtract(1, 'month').format('YYYY-MM-DD')
+const initStartApp = getStorage('initStartApp')
+const isLoaded = ref(false)
+
+// 启动定时器，每天凌晨刷新数据
+function startRefreshTimer() {
+  // 先清除之前的定时器
+  clearRefreshTimer()
+
+  // 计算到凌晨的时间
+  const now = Date.now()
+  const nextMidnight = getNextMidnight(now)
+  const delay = nextMidnight - now
+
+  refreshTimer.value = setTimeout(() => {
+    executeRefresh()
+    // 刷新完成后重新设置定时器
+    startRefreshTimer()
+  }, delay)
+}
+
+// 清理定时器
+function clearRefreshTimer() {
+  if (refreshTimer.value) {
+    clearTimeout(refreshTimer.value)
+    refreshTimer.value = null
+  }
+}
+
+// 计算下次刷新的时间
+function getNextMidnight(date: number) {
+  return dayjs(date).add(1, 'day').startOf('day').valueOf()
+}
+
+// 执行刷新操作
+function executeRefresh() {
+  removeStorageWithPrefixKey('trip')
+  // 使用全局事件发送刷新指令
+  uni.$emit('daily-refresh', { isRefresh: true })
+}
+
+// 检查是否需要刷新数据
+function checkAndRefresh() {
+  // 检查上次刷新时间，如果错过了就立即刷新
+  const lastRefresh = getStorage('last_refresh_time')
+  const now = Date.now()
+
+  if (lastRefresh) {
+    const lastDate = dayjs(lastRefresh).valueOf()
+    const shouldHaveRefreshed = getNextMidnight(lastDate)
+    if (now >= shouldHaveRefreshed) {
+      executeRefresh()
+    }
+  }
+  else {
+    // 第一次启动，立即刷新数据
+    executeRefresh()
+  }
+  setStorage('last_refresh_time', now, 'infinitely')
+}
+
+onShow(() => {
+  if (isLoaded.value) {
+    // 应用激活时检查是否需要刷新
+    checkAndRefresh()
+    // 应用激活时重新设置定时器
+    startRefreshTimer()
+  }
+})
+
+onHide(() => {
+  // 应用进入后台时清理定时器
+  clearRefreshTimer()
+})
+
+onMounted(async () => {
+  const timer = Date.now()
+  if (initStartApp) {
+    // 刷新token
+    await refreshToken()
+    // 获取所有员工
+    await getEmployees()
+    await getUser()
+    // 初始化行程数据
+    await searchTripsByDateRange(startDate, endDate)
+    appStartStore.setStarted(true)
+    // 跳转首页
+    uni.reLaunch({
+      url: `/pages/index`,
+    })
+  }
+  else {
+    // 跳转登录页
+    uni.reLaunch({
+      url: `/pages/auth/login?startDate=${startDate}&endDate=${endDate}`,
+    })
+  }
+  // 等待2秒，确保登录页加载完成
+  if (Date.now() - timer < 2000) {
+    await new Promise(resolve => setTimeout(resolve, 2000 - (Date.now() - timer)))
+  }
+
+  // 启动定时器，每天凌晨刷新数据
+  startRefreshTimer()
+  // 初始化完成，设置为已加载状态
+  isLoaded.value = true
+  // 手动关闭启动屏
+  plus.navigator.closeSplashscreen()
+})
 
 onError((err) => {
   console.error('错误捕获', err)

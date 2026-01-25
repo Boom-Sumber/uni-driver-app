@@ -21,8 +21,11 @@ export interface Trip {
   trip_expand?: TripExpand // 行程扩展信息（可选字段）
   [key: string]: unknown
 }
-
+// install_fee,handling_fee,freight_fee,other_fee,
 export interface TripExpand {
-  calculate_fee: number // 核算金额
+  install_fee: number // 安装费
+  handling_fee: number // 处理费
+  freight_fee: number // 运输费
+  other_fee: number // 其他费
   is_calculate: boolean // 是否已核算
 }

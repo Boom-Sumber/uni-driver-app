@@ -2,20 +2,21 @@
 import type { CalendarInstance } from 'wot-design-uni/components/wd-calendar/types'
 import type { Employee } from '@/types/empl.ts'
 import type { Trip, TripExpand } from '@/types/trip'
-import { onLoad, onNavigationBarButtonTap, onPullDownRefresh } from '@dcloudio/uni-app'
+import { onLoad, onNavigationBarButtonTap, onPullDownRefresh, onTabItemTap } from '@dcloudio/uni-app'
 import { useRouter } from 'uni-mini-router'
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import { dayjs } from 'wot-design-uni'
-import { getEmployees } from '@/api/methods/empl'
+import { refreshToken } from '@/apis/methods/auth'
+import { getEmployees } from '@/apis/methods/employee'
+import { searchTripsByDateRange } from '@/apis/methods/trip'
 import CountdownJumpPopup from '@/components/CountdownJumpPopup.vue'
-import { useTripStore } from '@/stores/trip'
-import { isLoggedIn } from '@/utils/tokenManager'
+import { useAppStartStore } from '@/stores/appStart'
 
 const showPopup = ref(false)
 // 路由实例
 const router = useRouter()
 
-const tripStore = useTripStore()
+const scrollTop = ref(0)
 
 // 日历组件实例
 const calendarRef = ref<CalendarInstance>()
@@ -28,27 +29,33 @@ const todayTrips = ref<Trip[]>([])
 
 const empl_list = ref<Employee[]>([])
 
-const startDate = dayjs().subtract(1, 'month').valueOf()
-const endDate = dayjs().valueOf()
+const startDate = ref<string>(dayjs().subtract(1, 'month').format('YYYY-MM-DD'))
+const endDate = ref<string>(dayjs().format('YYYY-MM-DD'))
 
 // 路由跳转方法
 const goToTrips = () => router.pushTab({ name: 'tripManager' })
-const goToAddTrip = () => router.push({ name: 'upsert', params: { mode: 'add', startDate: dayjs(startDate).format('YYYY-MM-DD'), endDate: dayjs(endDate).format('YYYY-MM-DD') } })
+const goToAddTrip = () => router.push({ name: 'upsert', params: { mode: 'add', startDate: startDate.value, endDate: endDate.value } })
 
 // 日期选择器改变事件
 async function handleCalendarconfirm({ value }: { value: number }) {
   // dateValue.value = value
-  await loadTrips(value)
+  await loadData(value)
   cardTitle.value = formatTitle(value)
   calendarRef.value?.close()
+
+  // 滚动到顶部  只有先让scrollTop.value变化才能触发滚动事件
+  scrollTop.value = 1
+  nextTick(() => {
+    scrollTop.value = 0
+  })
 }
 
 onLoad(async () => {
-  const { isSignedIn } = await isLoggedIn()
-  if (!isSignedIn) {
-    showPopup.value = true
+  const appStartStore = useAppStartStore()
+  if (!appStartStore.isStarted) {
     return
   }
+  cardTitle.value = formatTitle(dateValue.value)
   // 监听tabBar点击事件
   uni.$on('jumpToLogin', (pause) => {
     if (pause) {
@@ -56,36 +63,59 @@ onLoad(async () => {
     }
   })
   uni.$on('refreshTripList', async (o) => {
-    if (o?.isRefresh) {
-      await loadTrips()
+    if (o?.startDate === startDate.value && o?.endDate === endDate.value) {
+      await loadData()
     }
   })
-  empl_list.value = await getEmployees()
-  cardTitle.value = formatTitle(dateValue.value)
-  loadTrips()
+  uni.$on('daily-refresh', async (o) => {
+    if (o?.isRefresh) {
+      startDate.value = dayjs().subtract(1, 'month').format('YYYY-MM-DD')
+      endDate.value = dayjs().format('YYYY-MM-DD')
+      cardTitle.value = formatTitle(Date.now())
+      await loadData(Date.now())
+    }
+  })
+  await loadData()
 })
 
-onPullDownRefresh(() => {
+onPullDownRefresh(async () => {
+  await refreshToken()
   setTimeout(async () => {
-    await loadTrips()
+    await loadData()
   }, 1000)
   uni.stopPullDownRefresh()
 })
 // 导航栏按钮点击事件
-onNavigationBarButtonTap((e) => {
+onNavigationBarButtonTap(async (e) => {
   if (e.index === 0) {
-    // uni.removeStorageSync('token_expire_at')
-    // router.pushTab({ name: 'my' })
+    // 跳转员工列表页
+
   }
   else if (e.index === 1) {
     calendarRef.value?.open()
   }
 })
+// tabBar点击事件
+onTabItemTap(async () => {
+  try {
+    const isSuccess = await refreshToken()
+    if (!isSuccess) {
+      showPopup.value = true
+    }
+  }
+  catch (error) {
+    showPopup.value = true
+    throw error
+  }
+})
 
-async function loadTrips(seachDate: number = dateValue.value) {
-  await tripStore.initTrips(dayjs(startDate).format('YYYY-MM-DD'), dayjs(endDate).format('YYYY-MM-DD'))
-  const trips = tripStore.getTrips(dayjs(startDate).format('YYYY-MM-DD'), dayjs(endDate).format('YYYY-MM-DD'))
+async function loadData(seachDate: number = dateValue.value) {
+  // 获取最新行程数据
+  const trips = await searchTripsByDateRange(startDate.value, endDate.value)
   todayTrips.value = trips?.filter(trip => trip.trip_date === dayjs(seachDate).format('YYYY-MM-DD')) || []
+
+  // 获取最新员工数据
+  empl_list.value = await getEmployees()
 }
 
 // 格式化卡片标题,判断是不是今天,如果是今天,则添加(今日)后缀
@@ -96,7 +126,7 @@ function formatTitle(timestamp: number): string {
   return selectedDate === currentDate ? `${selectedDate}(今日)` : selectedDate
 }
 function handleTripClick(trip: Trip) {
-  router.push({ name: 'tripDetail', params: { trip: JSON.stringify(trip), startDate: dayjs(startDate).format('YYYY-MM-DD'), endDate: dayjs(endDate).format('YYYY-MM-DD') } })
+  router.push({ name: 'tripDetail', params: { trip: JSON.stringify(trip), startDate: startDate.value, endDate: endDate.value } })
 }
 // 新增：获取边框颜色的函数
 function getBorderColor(trip: Trip): string {
@@ -113,9 +143,10 @@ function getBorderColor(trip: Trip): string {
   <wd-calendar
     ref="calendarRef"
     v-model="dateValue"
-    :min-date="startDate"
-    :max-date="endDate"
+    :min-date="dayjs(startDate).valueOf()"
+    :max-date="dayjs(endDate).valueOf()"
     :with-cell="false"
+    type="date"
     @confirm="handleCalendarconfirm"
   />
   <view class="page-container">
@@ -147,6 +178,7 @@ function getBorderColor(trip: Trip): string {
           v-else
           class="trip-list"
           scroll-y
+          :scroll-top="scrollTop"
         >
           <view
             v-for="(trip, index) in todayTrips"

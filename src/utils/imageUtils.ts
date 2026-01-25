@@ -1,4 +1,4 @@
-import { getOCR } from '@/api/methods/ocr'
+import { getOCR } from '@/apis/methods/ocr'
 
 /**
  * 图片来源类型枚举
@@ -10,12 +10,6 @@ export async function getImageOCR(sourceType: ImageSourceType) {
   const ocr = await getOCR(base64Str)
   return ocr
 }
-
-uni.addInterceptor('request', {
-  invoke: (options) => {
-    console.warn('请求拦截器', options)
-  },
-})
 
 /**
  * 统一获取图片Base64函数

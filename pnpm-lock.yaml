@@ -86,6 +86,9 @@ importers:
       sha256:
         specifier: ^0.2.0
         version: 0.2.0
+      supabase-wechat-stable-v2:
+        specifier: ^2.2.0
+        version: 2.2.0
       uni-echarts:
         specifier: ^2.1.1
         version: 2.3.0(echarts@6.0.0)(vue@3.4.21(typescript@5.9.3))
@@ -4658,6 +4661,9 @@ packages:
     engines: {node: '>= 8'}
     deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
 
+  phoenix@1.8.3:
+    resolution: {integrity: sha512-5bMYQI30wl3erxbHnXMdt1xuQeRTeEOpQrakf3yqj/1HRHl7Gj4Cdk2NKXkUcCD5WpbxrilvZEMexM1VhWbnDg==}
+
   picocolors@1.1.0:
     resolution: {integrity: sha512-TQ92mBOW0l3LeMeyLV6mzy/kWr8lkd/hp3mTg7wYK7zJhuBStmGMBG0BdeDZS/dZx1IukaX6Bk11zcln25o1Aw==}
 
@@ -5313,6 +5319,9 @@ packages:
   strip-outer@1.0.1:
     resolution: {integrity: sha512-k55yxKHwaXnpYGsOzg4Vl8+tDrWylxDEpknGjhTiZB8dFRU5rTo9CAzeycivxV3s+zlTKwrs6WxMxR95n26kwg==}
     engines: {node: '>=0.10.0'}
+
+  supabase-wechat-stable-v2@2.2.0:
+    resolution: {integrity: sha512-vxDoMD5D451xpvDiqUDOzny7R0zuqKzHJ7GJu6doFxhs6DrmPvv24asLTh/NnjREuGqtrlhYdvLpQFPjMGR0+w==}
 
   superagent-proxy@3.0.0:
     resolution: {integrity: sha512-wAlRInOeDFyd9pyonrkJspdRAxdLrcsZ6aSnS+8+nu4x1aXbz6FWSTT9M6Ibze+eG60szlL7JA8wEIV7bPWuyQ==}
@@ -11967,6 +11976,8 @@ snapshots:
     transitivePeerDependencies:
       - debug
 
+  phoenix@1.8.3: {}
+
   picocolors@1.1.0: {}
 
   picocolors@1.1.1: {}
@@ -12687,6 +12698,10 @@ snapshots:
   strip-outer@1.0.1:
     dependencies:
       escape-string-regexp: 1.0.5
+
+  supabase-wechat-stable-v2@2.2.0:
+    dependencies:
+      phoenix: 1.8.3
 
   superagent-proxy@3.0.0(superagent@6.1.0):
     dependencies:

@@ -1,7 +1,8 @@
 import type { Trip } from '@/types/trip'
 import { defineStore } from 'pinia'
 import { dayjs } from 'wot-design-uni'
-import { searchTrips } from '@/api/methods/trip'
+// import { searchTrips } from '@/api/methods/trip'
+import { searchTrips } from '@/apis/methods/trip'
 import pinia from '@/stores'
 import { useCacheVersionStore } from './cacheVersion'
 
@@ -22,6 +23,12 @@ export const useTripStore = defineStore('trip', {
     },
     getTrips(startDate: string, endDate: string): Trip[] {
       return this.trips.get(`trip_${startDate}_${endDate}`) ?? []
+    },
+    getTripsKeys(date: number): string[] {
+      return Array.from(this.trips.keys()).filter((key) => {
+        const arr = key.split('_')
+        return dayjs(arr[1]).valueOf() <= date && dayjs(arr[2]).endOf('day').valueOf() >= date
+      })
     },
   },
 })
@@ -53,23 +60,18 @@ function sortTrips(trips: Trip[]): Trip[] {
   })
 }
 
-async function getTrips(startDate: string, endDate: string) {
+async function getTrips(startDate: string, endDate: string): Promise<Trip[]> {
   // 异步初始化行程数据,前31天数据
   const cacheExpire = dayjs(new Date().setHours(23, 59, 59, 999)).valueOf()
-  const config = {
-    // 通过name获取请求的method实例
-    params: {
-      select: '*,trips_expand(calculate_fee,is_calculate)',
+  return await searchTrips({
+    request: {
+      cacheMode: 'restore',
+      expire: cacheExpire,
+      cacheVersion: cacheVersionStore.generateCacheKey(`trip_${startDate}_${endDate}`),
+      cname: `trip_${startDate}_${endDate}`,
+    },
+    query: {
       trip_date: `gte.${startDate}&trip_date=lte.${endDate}`,
     },
-    name: `trip_${startDate}_${endDate}`,
-    cacheFor: {
-      // 设置缓存模式为持久化模式
-      mode: 'restore',
-      // 设置缓存时间为当天23:59:59.999
-      expire: cacheExpire,
-      tag: cacheVersionStore.generateCacheKey(`trip_${startDate}_${endDate}`),
-    },
-  }
-  return await searchTrips(config)
+  })
 }

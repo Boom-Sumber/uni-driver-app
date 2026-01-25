@@ -1,10 +1,8 @@
 <script setup lang="ts">
-import type { ErrorNotice } from '@/types/error'
 import { useRouter } from 'uni-mini-router'
 import { computed, ref } from 'vue'
-import { useToast } from 'wot-design-uni'
-import { registerByUsername, sendVerifyCode, verifyCode } from '@/api/methods/user'
-import { ResponseCode, ResponseMessage } from '@/types/responseCode'
+import { dayjs, useToast } from 'wot-design-uni'
+import { registerByUsername, sendVerifyCode, verifyCode } from '@/apis/methods/auth'
 
 const toast = useToast()
 const router = useRouter()
@@ -81,13 +79,16 @@ async function handleRegister(): Promise<void> {
     const result = await performRegister()
     if (result) {
       toast.success('注册成功')
+      const startDate = dayjs().subtract(1, 'month').format('YYYY-MM-DD')
+      const endDate = dayjs().format('YYYY-MM-DD')
       setTimeout(() => {
-        router.back()
+        router.replaceAll({ name: 'login', params: { startDate, endDate } })
       }, 1500)
     }
   }
   catch (error) {
-    handleRegisterError(error)
+    toast.error('注册失败，请稍后重试')
+    throw error
   }
   finally {
     toast.close()
@@ -169,7 +170,7 @@ async function performRegister(): Promise<boolean> {
       return false
     }
     // 直接调用验证码验证方法并转为布尔值（异常由你外部的处理逻辑承接）
-    return Boolean(await verifyCode(email.value, code.value))
+    return await verifyCode(email.value, code.value)
   }
 }
 
@@ -185,29 +186,6 @@ function validateEmail(value: string): boolean {
   }
   // 验证码登录时验证email
   return reg.test(value)
-}
-
-// 错误处理
-function handleRegisterError(error: any): void {
-  console.error('登录失败:', error)
-  const errorNotice: ErrorNotice = JSON.parse(error.message)
-  // 可以根据错误类型显示不同提示
-  if (errorNotice.code >= ResponseCode.INTERNAL_ERROR) {
-    toast.error('服务器异常,请联系管理员!')
-  }
-  else if (errorNotice.code === ResponseCode.TOO_MANY_REQUESTS) {
-    toast.error(errorNotice.customMsg || '请求频率过快')
-  }
-  else if (ResponseMessage.keys.includes(errorNotice.msg.stringCode || '')) {
-    toast.error(ResponseMessage[errorNotice.msg.stringCode || ''] || '注册失败，请稍后重试')
-  }
-  else {
-    const errorMessage = registerMode.value === 'username'
-      ? '用户名注册失败，请稍后重试'
-      : '邮箱注册失败，请稍后重试'
-    toast.error(errorMessage)
-  }
-  throw error
 }
 
 /**

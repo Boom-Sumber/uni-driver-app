@@ -32,7 +32,7 @@ export const useCacheVersionStore = defineStore('cacheVersion', {
 
     /**
      * 生成带版本号的完整缓存KEY（自动初始化版本号）
-     * @param state 状态
+     * @param _state 状态
      * @returns 缓存KEY生成函数
      */
     generateCacheKey: _state => (baseKey: string): string => {

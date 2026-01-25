@@ -13,9 +13,9 @@
     "compilerVersion": 3,
     "screenOrientation": ["portrait-primary"],
     "splashscreen": {
-      "alwaysShowBeforeRender": true,
+      "alwaysShowBeforeRender": false,
       "waiting": true,
-      "autoclose": true
+      "autoclose": false
     },
     "modules": {},
     "distribute": {

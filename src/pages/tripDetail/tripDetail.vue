@@ -3,13 +3,12 @@
 import type { Employee } from '@/types/empl.ts'
 import type { Trip, TripExpand } from '@/types/trip'
 import { onLoad } from '@dcloudio/uni-app'
-import { queryCache, setCache } from 'alova'
 import { useRouter } from 'uni-mini-router'
 import { computed, ref } from 'vue'
 import { dayjs } from 'wot-design-uni'
-import { alovaInst } from '@/api'
-import { getEmployees } from '@/api/methods/empl'
-import { deleteTrip } from '@/api/methods/trip'
+import { getEmployees } from '@/apis/methods/employee'
+import { deleteTrip, searchTripsByDateRange } from '@/apis/methods/trip'
+import { setStorage } from '@/utils/storage'
 
 const router = useRouter()
 
@@ -26,11 +25,19 @@ function getBorderColor(trip: Trip): string {
   return (trip.trips_expand as TripExpand)?.is_calculate ? '#07c160' : '#ff4949'
 }
 
-// 计算总费用
-const totalFee = computed(() => {
+// 计算支出费用总计
+const expenditureTotal = computed(() => {
   if (!tripDetail.value)
     return 0
   return (tripDetail.value.highway_fee + tripDetail.value.parking_fee + tripDetail.value.other_fees).toFixed(2)
+})
+
+// 计算结算费用合计
+const settlementTotal = computed(() => {
+  const expand = tripDetail.value?.trips_expand as TripExpand | undefined
+  if (!expand || !expand.is_calculate)
+    return '0.00'
+  return (expand.install_fee + expand.handling_fee + expand.freight_fee + expand.other_fee).toFixed(2)
 })
 
 // 格式化日期时间
@@ -76,32 +83,28 @@ function handleDelete() {
     content: '确定要删除行程吗？',
     success: (res) => {
       if (res.confirm) {
-        const methodSnapshot = alovaInst.snapshots.match(`trip_${startDate}_${endDate}`, true)
-        const isCacheExist = !!methodSnapshot
-        const targetMethod = isCacheExist ? (Array.isArray(methodSnapshot) ? methodSnapshot[0] : methodSnapshot) : null
-
-        if (!targetMethod) {
-          uni.showToast({ msg: '目标方法不存在', duration: 2000 })
-          throw new Error('目标alova实例不存在')
-        }
         // 调用删除接口
         deleteTrip(tripDetail.value?.id || '')
           .then(async () => {
-            const cacheData = await queryCache(targetMethod) as Trip[]
-            if (cacheData && Array.isArray(cacheData) && cacheData.length > 0) {
-              const updatedCache = cacheData.filter(item => item.id !== tripDetail.value?.id)
-              await setCache(targetMethod, updatedCache)
-              uni.$emit('refreshTripList', { isRefresh: true })
+            const trips = await searchTripsByDateRange(startDate, endDate)
+            if (trips && Array.isArray(trips) && trips.length > 0) {
+              const updatedCache = trips.filter(item => item.id !== tripDetail.value?.id)
+              const expireAt = dayjs().endOf('day').valueOf()
+              setStorage(`trip_${startDate}_${endDate}`, updatedCache, expireAt)
+              uni.$emit('refreshTripList', { startDate, endDate })
             }
 
             uni.showToast({
               title: '行程删除成功',
               icon: 'success',
             })
-            setTimeout(() => router.back({
-              animationType: 'slide-out-right',
-              delta: 2,
-            }), 1500)
+            setTimeout(() => {
+              const a = getCurrentPages()
+              router.back({
+                animationType: 'slide-out-right',
+                delta: a.length - 1,
+              })
+            }, 1500)
           })
           .catch((error) => {
             console.error('删除行程失败:', error)
@@ -249,7 +252,7 @@ onLoad(async (options) => {
             <view class="section">
               <view class="section-title">
                 <wd-icon name="coin" size="18" color="#666" />
-                <text>费用明细</text>
+                <text>支出费用明细</text>
               </view>
 
               <view class="fee-list">
@@ -282,25 +285,65 @@ onLoad(async (options) => {
 
                 <view class="fee-total">
                   <text class="total-label">
-                    费用总计
+                    支出费用总计
                   </text>
                   <text class="total-value">
-                    ¥{{ totalFee }}
+                    ¥{{ expenditureTotal }}
                   </text>
                 </view>
 
-                <!-- 核算费用（如果有） -->
-                <view
-                  v-if="(tripDetail.trips_expand as TripExpand)?.calculate_fee"
-                  class="fee-calculate"
-                >
-                  <text class="calculate-label">
-                    核算金额
-                  </text>
-                  <text class="calculate-value">
-                    ¥{{ (tripDetail.trips_expand as TripExpand)?.calculate_fee?.toFixed(2) }}
-                  </text>
-                </view>
+                <!-- 结算费用（只有已核算才显示） -->
+                <template v-if="(tripDetail.trips_expand as TripExpand)?.is_calculate">
+                  <view class="fee-subtitle settlement">
+                    <text>结算费用明细</text>
+                  </view>
+
+                  <view class="fee-item">
+                    <text class="fee-label">
+                      安装费
+                    </text>
+                    <text class="fee-value">
+                      ¥{{ (tripDetail.trips_expand as TripExpand)?.install_fee?.toFixed(2) || '0.00' }}
+                    </text>
+                  </view>
+
+                  <view class="fee-item">
+                    <text class="fee-label">
+                      上货费
+                    </text>
+                    <text class="fee-value">
+                      ¥{{ (tripDetail.trips_expand as TripExpand)?.handling_fee?.toFixed(2) || '0.00' }}
+                    </text>
+                  </view>
+
+                  <view class="fee-item">
+                    <text class="fee-label">
+                      运输费
+                    </text>
+                    <text class="fee-value">
+                      ¥{{ (tripDetail.trips_expand as TripExpand)?.freight_fee?.toFixed(2) || '0.00' }}
+                    </text>
+                  </view>
+
+                  <view class="fee-item">
+                    <text class="fee-label">
+                      其他费
+                    </text>
+                    <text class="fee-value">
+                      ¥{{ (tripDetail.trips_expand as TripExpand)?.other_fee?.toFixed(2) || '0.00' }}
+                    </text>
+                  </view>
+
+                  <!-- 结算费用合计 -->
+                  <view class="fee-subtotal settlement">
+                    <text class="subtotal-label">
+                      结算费用合计
+                    </text>
+                    <text class="subtotal-value">
+                      ¥{{ settlementTotal }}
+                    </text>
+                  </view>
+                </template>
               </view>
             </view>
 
@@ -528,6 +571,26 @@ onLoad(async (options) => {
 
 // 费用列表
 .fee-list {
+// 费用小标题
+  .fee-subtitle {
+    padding: 20rpx 0 10rpx;
+    margin-top: 20rpx;
+    border-bottom: 1rpx solid #f0f0f0;
+
+    text {
+      font-size: 26rpx;
+      font-weight: 600;
+      color: #333;
+    }
+
+    &.settlement {
+      border-bottom: 1rpx solid #07c160;
+
+      text {
+        color: #07c160;
+      }
+    }
+  }
   .fee-item {
     display: flex;
     justify-content: space-between;
@@ -548,6 +611,52 @@ onLoad(async (options) => {
       font-size: 30rpx;
       color: #333;
       font-weight: 500;
+    }
+  }
+
+  // 支出费用小计
+  .fee-subtotal {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20rpx 0;
+    margin-top: 10rpx;
+    border-top: 1rpx solid #e0e0e0;
+
+    .subtotal-label {
+      font-size: 28rpx;
+      color: #666;
+      font-weight: 500;
+    }
+
+    .subtotal-value {
+      font-size: 32rpx;
+      color: #333;
+      font-weight: 600;
+    }
+
+    &.expenditure {
+      border-top: 1rpx solid #ff6b6b;
+
+      .subtotal-label {
+        color: #ff6b6b;
+      }
+
+      .subtotal-value {
+        color: #ff6b6b;
+      }
+    }
+
+    &.settlement {
+      border-top: 1rpx solid #07c160;
+
+      .subtotal-label {
+        color: #07c160;
+      }
+
+      .subtotal-value {
+        color: #07c160;
+      }
     }
   }
 

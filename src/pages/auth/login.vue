@@ -1,15 +1,16 @@
 <script setup lang="ts">
-import type { Session } from '@/types/authType'
-import type { ErrorNotice } from '@/types/error'
 import { useRouter } from 'uni-mini-router'
 import { computed, ref } from 'vue'
-import { useToast } from 'wot-design-uni'
-import { loginWithPsd, sendCode, verifyCode } from '@/api/methods/user'
-import { useAuthStore } from '@/stores/auth'
-import { ResponseCode } from '@/types/responseCode'
+import { dayjs, useToast } from 'wot-design-uni'
+import { getUser, loginWithPsd, sendCode, verifyCode } from '@/apis/methods/auth'
+import { getEmployees } from '@/apis/methods/employee'
+import { searchTripsByDateRange } from '@/apis/methods/trip'
+import { useAppStartStore } from '@/stores/appStart'
+import { setStorage } from '@/utils/storage'
+
+const appStartStore = useAppStartStore()
 
 const toast = useToast()
-const authStore = useAuthStore()
 const router = useRouter()
 
 // 定义登录模式类型
@@ -31,6 +32,8 @@ const sliderStyle = computed(() => {
       : 'translateX(100%)',
   }
 })
+const startDate = ref<string>(dayjs().subtract(1, 'month').format('YYYY-MM-DD'))
+const endDate = ref<string>(dayjs().format('YYYY-MM-DD'))
 
 /**
  * 获取验证码
@@ -79,18 +82,26 @@ async function handleLogin(): Promise<void> {
 
   toast.loading('登录中...')
 
-  try {
-    const session = await performLogin()
+  const isSuccess = await performLogin()
 
-    // 登录成功处理
-    await handleLoginSuccess(session)
+  // 登录成功处理
+  if (isSuccess) {
+    await handleLoginSuccess()
   }
-  catch (error) {
-    handleLoginError(error)
+  else {
+    toast.error('登录失败，请检查账号或密码')
   }
-  finally {
-    toast.close()
-  }
+  toast.close()
+}
+
+async function handleLoginSuccess(): Promise<void> {
+  await searchTripsByDateRange(startDate.value, endDate.value)
+  await getUser()
+  await getEmployees()
+  setStorage('initStartApp', true, 'infinitely')
+  await new Promise(resolve => setTimeout(resolve, 1500))
+  appStartStore.setStarted(true)
+  router.replaceAll({ name: 'index' })
 }
 
 // 验证输入函数
@@ -149,44 +160,24 @@ function validateCodeInputs(): boolean {
 }
 
 // 执行登录
-async function performLogin(): Promise<Session> {
+async function performLogin(): Promise<boolean> {
   if (loginMode.value === 'password') {
     // 处理账号格式
     const accountForLogin = account.value.includes('@')
       ? account.value
       : `${account.value}@custom.com`
 
-    return await loginWithPsd(accountForLogin, password.value)
+    // eslint-disable-next-line no-useless-catch
+    try {
+      return await loginWithPsd(accountForLogin, password.value)
+    }
+    catch (error) {
+      throw error
+    }
   }
   else {
     return await verifyCode(email.value, code.value)
   }
-}
-
-// 登录成功处理
-async function handleLoginSuccess(session: Session): Promise<void> {
-  if (!session?.access_token) {
-    const errorNotice: ErrorNotice = {
-      code: ResponseCode.NOT_FOUND,
-      msg: {
-        stringCode: 'NOT_FOUND',
-        codeMsg: '资源不存在',
-      },
-      customMsg: '登录凭证缺失',
-      from: 'login',
-    }
-    throw new Error(JSON.stringify(errorNotice))
-  }
-
-  authStore.setAuth(
-    session.access_token,
-    session.refresh_token,
-    session.user,
-    session.expires_at,
-  )
-  // 使用延迟跳转
-  await new Promise(resolve => setTimeout(resolve, 1500))
-  router.pushTab({ name: 'index' })
 }
 
 /**
@@ -201,29 +192,6 @@ function validateEmail(value: string): boolean {
   }
   // 验证码登录时验证email
   return reg.test(value)
-}
-
-// 错误处理
-function handleLoginError(error: any): void {
-  console.error('登录失败:', error)
-  const errorNotice: ErrorNotice = JSON.parse(error.message)
-  // 可以根据错误类型显示不同提示
-  if (errorNotice.code === ResponseCode.NOT_FOUND) {
-    toast.error(errorNotice.customMsg || '登录凭证缺失')
-  }
-  else if (errorNotice.code === ResponseCode.TOO_MANY_REQUESTS) {
-    toast.error(errorNotice.customMsg || '请求频率过快')
-  }
-  else if (errorNotice.code === ResponseCode.INVALID_REQUEST) {
-    toast.error(errorNotice.customMsg || '请求参数错误')
-  }
-  else {
-    const errorMessage = loginMode.value === 'password'
-      ? '登录失败，请稍后重试'
-      : '验证码验证失败，请稍后重试'
-    toast.error(errorMessage)
-  }
-  throw error
 }
 
 /**
