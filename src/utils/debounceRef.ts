@@ -7,7 +7,7 @@ import { customRef } from 'vue'
  * @returns 防抖 ref 对象
  */
 export function debounceRef<T>(value: T, delay = 500) {
-  let timer: number | null = null
+  let timer: ReturnType<typeof setTimeout>
   return customRef((track, trigger) => ({
     get() {
       track()

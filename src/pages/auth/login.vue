@@ -2,7 +2,7 @@
 import { useRouter } from 'uni-mini-router'
 import { computed, ref } from 'vue'
 import { dayjs, useToast } from 'wot-design-uni'
-import { getUser, loginWithPsd, sendCode, verifyCode } from '@/apis/methods/auth'
+import { loginWithPsd, sendCode, verifyCode } from '@/apis/methods/auth'
 import { getEmployees } from '@/apis/methods/employee'
 import { searchTripsByDateRange } from '@/apis/methods/trip'
 import { useAppStartStore } from '@/stores/appStart'
@@ -95,9 +95,15 @@ async function handleLogin(): Promise<void> {
 }
 
 async function handleLoginSuccess(): Promise<void> {
-  await searchTripsByDateRange(startDate.value, endDate.value)
-  await getUser()
-  await getEmployees()
+  try {
+    await searchTripsByDateRange(startDate.value, endDate.value)
+    await getEmployees()
+  }
+  catch (error) {
+    toast.error('登录失败，请稍后重试')
+    throw error
+  }
+
   setStorage('initStartApp', true, 'infinitely')
   await new Promise(resolve => setTimeout(resolve, 1500))
   appStartStore.setStarted(true)
@@ -167,16 +173,23 @@ async function performLogin(): Promise<boolean> {
       ? account.value
       : `${account.value}@custom.com`
 
-    // eslint-disable-next-line no-useless-catch
     try {
-      return await loginWithPsd(accountForLogin, password.value)
+      const isSuccess = await loginWithPsd(accountForLogin, password.value)
+      return isSuccess
     }
     catch (error) {
+      toast.error('登录失败，请检查账号或密码')
       throw error
     }
   }
   else {
-    return await verifyCode(email.value, code.value)
+    try {
+      return await verifyCode(email.value, code.value)
+    }
+    catch (error) {
+      toast.error('登录失败，请检查邮箱或验证码')
+      throw error
+    }
   }
 }
 

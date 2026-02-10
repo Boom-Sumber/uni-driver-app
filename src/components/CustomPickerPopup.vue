@@ -39,7 +39,7 @@ const props = withDefaults(defineProps<CustomPickerPopupProps>(), {
   title: '请选择',
   loading: false,
   resetOnClose: true,
-  itemHeight: 35,
+  itemHeight: 45,
   modelValue: false,
 })
 

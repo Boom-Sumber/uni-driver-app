@@ -13,11 +13,10 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to?: any, from?: any, next?: any) => {
-  const isLoggedIn = await refreshToken()
   if (ignorePaths.includes(to.path)) {
     next()
   }
-  else if (isLoggedIn) {
+  else if (await refreshToken()) {
     next()
   }
   else {

@@ -204,6 +204,7 @@ export async function updatePassword(password: string): Promise<boolean> {
       password,
     })
     if (error) {
+      console.error('更新密码失败', error)
       throw error
     }
     await logout()

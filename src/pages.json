@@ -66,6 +66,7 @@
     {
       "path": "pages/my/my",
       "style": {
+        "enablePullDownRefresh": false,
         "navigationBarTitleText": "个人中心"
       },
       "name": "my"
@@ -73,6 +74,7 @@
     {
       "path": "pages/tripManager/tripManager",
       "style": {
+        "enablePullDownRefresh": false,
         "navigationBarTitleText": "行程管理"
       },
       "name": "tripManager"
@@ -80,7 +82,23 @@
     {
       "path": "pages/data/data",
       "style": {
-        "navigationBarTitleText": "数据中心"
+        "enablePullDownRefresh": false,
+        "app-plus": {
+          "titleNView": {
+            "titleText": "数据中心",
+            "buttons": [
+              {
+                "type": "none",
+                "fontSrc": "static/iconfont/iconfont.ttf",
+                "text": "",
+                "fontSize": "18px",
+                "fontWeight": "bold",
+                "color": "@navTxtStyle",
+                "float": "right"
+              }
+            ]
+          }
+        }
       },
       "name": "data"
     },

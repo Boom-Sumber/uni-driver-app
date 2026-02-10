@@ -2,15 +2,17 @@
 <script setup lang="ts">
 import type { Employee } from '@/types/empl.ts'
 import type { Trip, TripExpand } from '@/types/trip'
-import { onLoad } from '@dcloudio/uni-app'
+import { onLoad, onUnload } from '@dcloudio/uni-app'
 import { useRouter } from 'uni-mini-router'
 import { computed, ref } from 'vue'
-import { dayjs } from 'wot-design-uni'
+import { dayjs, useMessage, useToast } from 'wot-design-uni'
 import { getEmployees } from '@/apis/methods/employee'
 import { deleteTrip, searchTripsByDateRange } from '@/apis/methods/trip'
 import { setStorage } from '@/utils/storage'
 
 const router = useRouter()
+const toast = useToast()
+const message = useMessage()
 
 // 行程详情数据
 const tripDetail = ref<Trip | null>(null)
@@ -19,7 +21,10 @@ const isLoading = ref(true)
 
 let startDate: string = ''
 let endDate: string = ''
+let trips: Trip[] = []
+let isUpdateCache: boolean = false
 
+let timer: any
 // 获取边框颜色的函数
 function getBorderColor(trip: Trip): string {
   return (trip.trips_expand as TripExpand)?.is_calculate ? '#07c160' : '#ff4949'
@@ -69,51 +74,45 @@ function handleEdit() {
       trip: JSON.stringify(tripDetail.value),
       startDate,
       endDate,
+      isUpdateCache: JSON.stringify(isUpdateCache),
     },
   })
 }
 
 // 删除行程
-function handleDelete() {
+async function handleDelete() {
   if (!tripDetail.value)
     return
 
-  uni.showModal({
+  await message.confirm({
     title: '确认删除',
-    content: '确定要删除行程吗？',
-    success: (res) => {
-      if (res.confirm) {
-        // 调用删除接口
-        deleteTrip(tripDetail.value?.id || '')
-          .then(async () => {
-            const trips = await searchTripsByDateRange(startDate, endDate)
-            if (trips && Array.isArray(trips) && trips.length > 0) {
-              const updatedCache = trips.filter(item => item.id !== tripDetail.value?.id)
-              const expireAt = dayjs().endOf('day').valueOf()
-              setStorage(`trip_${startDate}_${endDate}`, updatedCache, expireAt)
-              uni.$emit('refreshTripList', { startDate, endDate })
-            }
-
-            uni.showToast({
-              title: '行程删除成功',
-              icon: 'success',
-            })
-            setTimeout(() => {
-              const a = getCurrentPages()
-              router.back({
-                animationType: 'slide-out-right',
-                delta: a.length - 1,
-              })
-            }, 1500)
-          })
-          .catch((error) => {
-            console.error('删除行程失败:', error)
-            uni.showToast({
-              title: '删除失败',
-              icon: 'error',
-            })
-          })
+    msg: '确定要删除行程吗？',
+    beforeConfirm: async () => {
+      toast.loading('删除中...')
+      // 调用删除接口
+      try {
+        await deleteTrip(tripDetail.value?.id || '')
       }
+      catch (error) {
+        toast.error('删除行程失败')
+        throw error
+      }
+      if (isUpdateCache) {
+        if (trips && Array.isArray(trips) && trips.length > 0) {
+          const updatedCache = trips.filter(item => item.id !== tripDetail.value?.id)
+          const expireAt = dayjs().endOf('day').valueOf()
+          setStorage(`trip_${startDate}_${endDate}`, updatedCache, expireAt)
+        }
+      }
+      uni.$emit('refreshTripList', { startDate, endDate })
+
+      timer = setTimeout(() => {
+        toast.success('行程删除成功')
+        router.back({
+          animationType: 'slide-out-right',
+          delta: getCurrentPages().length - 1,
+        })
+      }, 1500)
     },
   })
 }
@@ -124,35 +123,44 @@ onLoad(async (options) => {
     empl_list.value = await getEmployees()
 
     // 获取行程
-    const trip = JSON.parse(options?.trip || '{}') as Trip
-    if (!trip) {
-      uni.showToast({
-        title: '行程ID不存在',
-        icon: 'error',
-      })
-      setTimeout(() => router.back(), 1500)
-      return
-    }
     startDate = options?.startDate || dayjs().subtract(1, 'month').format('YYYY-MM-DD')
     endDate = options?.endDate || dayjs().format('YYYY-MM-DD')
-
+    isUpdateCache = JSON.parse(options?.isUpdateCache || 'false')
+    const tripId = options?.id || ''
+    if (!tripId) {
+      toast.error('行程ID不存在')
+      timer = setTimeout(() => router.back(), 1500)
+      return
+    }
+    trips = await searchTripsByDateRange(startDate, endDate)
+    const trip = trips.find(trip => trip.id === tripId)
+    if (!trip) {
+      toast.error('行程不存在')
+      timer = setTimeout(() => router.back(), 1500)
+      return
+    }
     // 加载行程详情
     tripDetail.value = trip
   }
   catch (error) {
     console.error('加载行程详情失败:', error)
-    uni.showToast({
-      title: '加载失败',
-      icon: 'error',
-    })
+    throw error
   }
   finally {
     isLoading.value = false
   }
 })
+
+onUnload(() => {
+  if (timer) {
+    clearTimeout(timer)
+  }
+})
 </script>
 
 <template>
+  <wd-toast />
+  <wd-message-box />
   <view class="page-container">
     <view class="page-content">
       <!-- 加载状态 -->

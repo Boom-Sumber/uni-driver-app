@@ -162,7 +162,14 @@ async function performRegister(): Promise<boolean> {
       return false
     }
     // 直接调用用户名注册方法（异常由你外部的处理逻辑承接）
-    return await registerByUsername(account.value, password.value)
+    try {
+      const result = await registerByUsername(account.value, password.value)
+      return result
+    }
+    catch (error) {
+      toast.error('注册失败，请稍后重试')
+      throw error
+    }
   }
   else {
     // 验证验证码输入不通过，直接返回false
@@ -170,7 +177,14 @@ async function performRegister(): Promise<boolean> {
       return false
     }
     // 直接调用验证码验证方法并转为布尔值（异常由你外部的处理逻辑承接）
-    return await verifyCode(email.value, code.value)
+    try {
+      const result = await verifyCode(email.value, code.value)
+      return result
+    }
+    catch (error) {
+      toast.error('验证码验证失败，请稍后重试')
+      throw error
+    }
   }
 }
 

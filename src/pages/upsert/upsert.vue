@@ -10,11 +10,10 @@ import { useRouter } from 'uni-mini-router'
 import { computed, ref, watch } from 'vue'
 import { dayjs, useMessage, useToast } from 'wot-design-uni'
 import { getEmployees } from '@/apis/methods/employee'
-import { addTrip, editTrip, searchTripsByDateRange } from '@/apis/methods/trip'
+import { addTrip, editTrip, searchTripsByDateRange, searchTripsByTrackingNumber, sortTrips } from '@/apis/methods/trip'
 import { useIncrementalUpdate } from '@/composables/useIncrementalUpdate'
-import { debounceRef } from '@/utils/debounceRef'
 import { getImageOCR } from '@/utils/imageUtils'
-import { setStorage } from '@/utils/storage'
+import { getStorage, setStorage } from '@/utils/storage'
 
 const router = useRouter()
 const toast = useToast()
@@ -22,7 +21,7 @@ const messageBox = useMessage()
 const ocrSlotMessage = useMessage('ocr-slot-message')
 
 const mode = ref<'add' | 'edit'>('add')
-const userInfo = uni.getStorageSync('app_user')
+const userInfo = getStorage('app_user')
 // 定义完整的 Trip 默认值
 const defaultTrip: Trip = {
   id: '',
@@ -49,7 +48,7 @@ interface PageModel {
   other_fees: number | undefined
 }
 const trackingNumber = ref('')
-const pageModel = debounceRef<PageModel>({
+const pageModel = ref<PageModel>({
   distance: undefined,
   highway_fee: undefined,
   parking_fee: undefined,
@@ -65,15 +64,16 @@ const ocrResult = ref<OCRData | null>(null)
 // 直接使用 useIncrementalUpdate 的返回值
 let incrementalUpdate: ReturnType<typeof useIncrementalUpdate<Trip>>
 
-const isInitialized = ref(false)
-
 // 用于获取method实例
 let startDate = ''
 let endDate = ''
 let trips: Trip[] = []
+let isUpdateCache: boolean = false
 
 // 订单号输入框聚焦状态
 const trackingOrderFocus = ref(false)
+
+// 表单是否加载完成
 let isLoaded = false
 
 // 选择图片的弹窗状态
@@ -128,6 +128,7 @@ onLoad(async (options) => {
       MsgVisibleWithBtnShow.value = false
     }
   })
+  isUpdateCache = JSON.parse(options?.isUpdateCache || 'false')
   const routeMode = options?.mode as 'add' | 'edit'
   if (routeMode) {
     startDate = options?.startDate || ''
@@ -161,7 +162,7 @@ onLoad(async (options) => {
     uni.setNavigationBarTitle({
       title: '新增行程',
     })
-    trackingNumber.value = getDatePlaceholder()
+    initialData.value.tracking_number = getDatePlaceholder()
     if (userInfo) {
       initialData.value.user_id = userInfo.id
     }
@@ -182,33 +183,62 @@ onLoad(async (options) => {
     disabled: false,
   }))
   // 初始化行程列表
-  trips = await searchTripsByDateRange(startDate, endDate)
-  onAddTripInitFrom()
+  await onAddTripInitFrom()
   isLoaded = true
   toast.close()
 })
 
-watch(() => trackingOrderFocus.value, async (newValue) => {
+watch(trackingOrderFocus, async (newValue) => {
   if (!newValue && isLoaded && trackingNumber.value && trackingNumber.value.length > 0) {
     incrementalUpdate.formData.value.tracking_number = trackingNumber.value
-    if (trips.length > 0) {
-      incrementalUpdate.formData.value.start_location = trips[0].start_location
-      incrementalUpdate.formData.value.end_location = trips[0].end_location
-      pageModel.value.distance = trips[0].distance
-      pageModel.value.highway_fee = trips[0].highway_fee
-      incrementalUpdate.formData.value.distance = trips[0].distance
-      incrementalUpdate.formData.value.highway_fee = trips[0].highway_fee
+    try {
+      const tripsWithTrackingNumber = await searchTripsByTrackingNumber(trackingNumber.value)
+      if (tripsWithTrackingNumber.length > 0) {
+        incrementalUpdate.formData.value.start_location = tripsWithTrackingNumber[0].start_location
+        incrementalUpdate.formData.value.end_location = tripsWithTrackingNumber[0].end_location
+        pageModel.value.distance = tripsWithTrackingNumber[0].distance
+        pageModel.value.highway_fee = tripsWithTrackingNumber[0].highway_fee
+      }
+    }
+    catch (error) {
+      console.error('查询行程记录失败:', error)
+      toast.error('查询行程记录失败')
     }
   }
 })
+watch(pageModel, (newValue) => {
+  if (!newValue && !isLoaded) {
+    return
+  }
+  if (newValue.distance !== undefined) {
+    incrementalUpdate.formData.value.distance = newValue.distance
+  }
+  if (newValue.highway_fee !== undefined) {
+    incrementalUpdate.formData.value.highway_fee = newValue.highway_fee
+  }
+  if (newValue.parking_fee !== undefined) {
+    incrementalUpdate.formData.value.parking_fee = newValue.parking_fee
+  }
+  if (newValue.other_fees !== undefined) {
+    incrementalUpdate.formData.value.other_fees = newValue.other_fees
+  }
+}, { deep: true })
 // 新增行程初始化起点
-function onAddTripInitFrom() {
+async function onAddTripInitFrom() {
   if (!incrementalUpdate)
     return
+  try {
+    // 初始化数据
+    trips = await searchTripsByDateRange(startDate, endDate)
+  }
+  catch (error) {
+    toast.error('加载行程数据失败')
+    throw error
+  }
   if (mode.value === 'add') {
     const currentDataTrip = trips.filter(item => item.trip_date === dayjs(defaultDate.value).format('YYYY-MM-DD'))
     if (currentDataTrip.length > 0) {
-      incrementalUpdate.formData.value.start_location = currentDataTrip[currentDataTrip.length - 1].end_location
+      incrementalUpdate.formData.value.start_location = currentDataTrip[0].end_location
     }
     else {
       incrementalUpdate.formData.value.start_location = '工厂'
@@ -222,10 +252,7 @@ function initializeIncrementalUpdate() {
     // 确保 initialData 是完整的 Trip 对象
     const completeData = { ...defaultTrip, ...initialData.value } as Trip
 
-    incrementalUpdate = useIncrementalUpdate(completeData, ['id', 'created_at', 'updated_at', 'is_deleted', 'deleted_at'])
-
-    // 标记为已初始化
-    isInitialized.value = true
+    incrementalUpdate = useIncrementalUpdate(completeData, ['id', 'created_at', 'updated_at', 'is_deleted', 'deleted_at', 'trip_expand'])
   }
   catch (error) {
     console.error('初始化增量更新失败:', error)
@@ -233,7 +260,7 @@ function initializeIncrementalUpdate() {
   }
 }
 
-function handleDateConfirm(event: any) {
+async function handleDateConfirm(event: any) {
   if (!incrementalUpdate)
     return
 
@@ -244,7 +271,7 @@ function handleDateConfirm(event: any) {
   }
   incrementalUpdate.formData.value.trip_date = dayjs(event.value).format('YYYY-MM-DD')
   showDatePicker.value = false
-  onAddTripInitFrom()
+  await onAddTripInitFrom()
 }
 // 订单号输入框占位符
 function getDatePlaceholder(): string {
@@ -292,14 +319,16 @@ function handleCacheError(err: unknown, from: string): never {
 }
 
 // 通用缓存更新函数
-async function updateCache(data: Trip | null, updater: (cache: Trip[], data: Trip | null) => Trip[]) {
-  const cacheExpire = dayjs().endOf('day').valueOf()
-  if (!trips || !Array.isArray(trips) || trips.length === 0) {
-    setStorage(`trip_${startDate}_${endDate}`, [data], cacheExpire)
-  }
-  else {
-    const updatedCache = updater(trips, data)
-    setStorage(`trip_${startDate}_${endDate}`, updatedCache, cacheExpire)
+function updateCache(data: Trip | null, updater: (cache: Trip[], data: Trip | null) => Trip[]) {
+  if (isUpdateCache) {
+    const cacheExpire = dayjs().endOf('day').valueOf()
+    if (!trips || !Array.isArray(trips) || trips.length === 0) {
+      setStorage(`trip_${startDate}_${endDate}`, [data], cacheExpire)
+    }
+    else {
+      const updatedCache = updater(trips, data)
+      setStorage(`trip_${startDate}_${endDate}`, updatedCache, cacheExpire)
+    }
   }
   // 刷新行程列表
   uni.$emit('refreshTripList', { startDate, endDate })
@@ -310,7 +339,7 @@ const addTripConfig: OperationConfig = {
   cacheUpdater: (oldCache, data) => {
     if (data)
       oldCache.unshift(data)
-    return oldCache
+    return sortTrips(oldCache)
   },
   onSuccess: async () => {
     MsgVisibleWithBtnShow.value = true
@@ -320,16 +349,24 @@ const addTripConfig: OperationConfig = {
       confirmButtonText: '继续',
       cancelButtonText: '返回',
     })
-      .then(() => {
+      .then(async () => {
         incrementalUpdate.formData.value = {
           ...defaultTrip,
           user_id: userInfo?.id || '',
           trip_date: dayjs().format('YYYY-MM-DD'),
-          tracking_number: dayjs().format('YYYYMMDDHHmmss'),
+          tracking_number: getDatePlaceholder(),
+        }
+        defaultTimeSlot.value = [dayjs().subtract(1, 'hour').format('HH:mm'), dayjs().format('HH:mm')]
+        pageModel.value = {
+          distance: undefined,
+          highway_fee: undefined,
+          parking_fee: undefined,
+          other_fees: undefined,
         }
         selectedCoordinator.value = ''
         showCoordinatorPicker.value = false
         showTimeSlotPicker.value = false
+        await onAddTripInitFrom()
       })
       .catch(() => {
         const a = getCurrentPages()
@@ -364,7 +401,7 @@ const editTripConfig: OperationConfig = {
 function createCacheHandler(config: OperationConfig): CallbackFunc {
   return async (data) => {
     try {
-      await updateCache(data, config.cacheUpdater)
+      updateCache(data, config.cacheUpdater)
       MsgVisibleWithBtnShow.value = true
       toast.close()
       await config.onSuccess()
@@ -399,16 +436,27 @@ async function saveTrip() {
 
     if (mode.value === 'add') {
       const { id, created_at, updated_at, is_deleted, deleted_at, trip_expand, ...insertData } = incrementalUpdate?.formData.value
-      result = await addTrip(insertData)
+      try {
+        result = await addTrip(insertData)
+      }
+      catch (error) {
+        toast.error('新增行程失败')
+        throw error
+      }
     }
     else if (mode.value === 'edit') {
       if (isEmpty(incrementalUpdate?.diffData.value)) {
         toast.error({ msg: '未检测到需要更新的内容', duration: 2000 })
         return
       }
-      result = await editTrip(incrementalUpdate?.diffData.value, incrementalUpdate?.formData.value.id)
+      try {
+        result = await editTrip(incrementalUpdate?.diffData.value, incrementalUpdate?.formData.value.id)
+      }
+      catch (error) {
+        toast.error('编辑行程失败')
+        throw error
+      }
     }
-
     const operation = operationMap.get(operationKey)
     if (operation) {
       await operation(result)
@@ -464,7 +512,13 @@ async function handleImageConfirm(value: string) {
     msg: '正在识别图片...',
     direction: 'vertical',
   })
-  ocrResult.value = await getImageOCR(ocrSource)
+  try {
+    ocrResult.value = await getImageOCR(ocrSource)
+  }
+  catch (error) {
+    toast.error('识别图片失败')
+    throw error
+  }
 
   toast.close()
   if (ocrResult.value) {
@@ -606,6 +660,7 @@ async function handleImageConfirm(value: string) {
             type="number"
             placeholder="0"
             :cursor-spacing="20"
+            clearable
             inputmode="numeric"
             @clear="() => incrementalUpdate.formData.value.distance = 0"
             @input="(e) => incrementalUpdate.formData.value.distance = e.value"
@@ -622,6 +677,8 @@ async function handleImageConfirm(value: string) {
             label="高速费(元)"
             type="number"
             placeholder="0"
+            :cursor-spacing="20"
+            inputmode="numeric"
             clearable
             @clear="() => incrementalUpdate.formData.value.highway_fee = 0"
             @input="(e) => incrementalUpdate.formData.value.highway_fee = e.value"
@@ -633,6 +690,8 @@ async function handleImageConfirm(value: string) {
             label="停车费(元)"
             type="number"
             placeholder="0"
+            :cursor-spacing="20"
+            inputmode="numeric"
             clearable
             @clear="() => incrementalUpdate.formData.value.parking_fee = 0"
             @input="(e) => incrementalUpdate.formData.value.parking_fee = e.value"
@@ -644,6 +703,8 @@ async function handleImageConfirm(value: string) {
             label="其他费用(元)"
             type="number"
             placeholder="0"
+            :cursor-spacing="20"
+            inputmode="numeric"
             clearable
             @clear="() => incrementalUpdate.formData.value.other_fees = 0"
             @input="(e) => incrementalUpdate.formData.value.other_fees = e.value"
@@ -661,7 +722,7 @@ async function handleImageConfirm(value: string) {
             v-model="incrementalUpdate.formData.value.remarks"
             placeholder="请输入备注信息"
             :autosize="{ minRows: 3 }"
-            clearable
+            clear-trigger="focus"
           />
         </view>
       </wd-card>

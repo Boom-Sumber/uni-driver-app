@@ -34,7 +34,7 @@ const endDate = ref<string>(dayjs().format('YYYY-MM-DD'))
 
 // 路由跳转方法
 const goToTrips = () => router.pushTab({ name: 'tripManager' })
-const goToAddTrip = () => router.push({ name: 'upsert', params: { mode: 'add', startDate: startDate.value, endDate: endDate.value } })
+const goToAddTrip = () => router.push({ name: 'upsert', params: { mode: 'add', startDate: startDate.value, endDate: endDate.value, isUpdateCache: JSON.stringify(true) } })
 
 // 日期选择器改变事件
 async function handleCalendarconfirm({ value }: { value: number }) {
@@ -88,8 +88,8 @@ onPullDownRefresh(async () => {
 // 导航栏按钮点击事件
 onNavigationBarButtonTap(async (e) => {
   if (e.index === 0) {
-    // 跳转员工列表页
-
+    // 跳转个人中心
+    router.pushTab({ name: 'my' })
   }
   else if (e.index === 1) {
     calendarRef.value?.open()
@@ -126,7 +126,7 @@ function formatTitle(timestamp: number): string {
   return selectedDate === currentDate ? `${selectedDate}(今日)` : selectedDate
 }
 function handleTripClick(trip: Trip) {
-  router.push({ name: 'tripDetail', params: { trip: JSON.stringify(trip), startDate: startDate.value, endDate: endDate.value } })
+  router.push({ name: 'tripDetail', params: { id: trip.id, startDate: startDate.value, endDate: endDate.value, isUpdateCache: JSON.stringify(true) } })
 }
 // 新增：获取边框颜色的函数
 function getBorderColor(trip: Trip): string {
@@ -149,7 +149,7 @@ function getBorderColor(trip: Trip): string {
     type="date"
     @confirm="handleCalendarconfirm"
   />
-  <view class="page-container">
+  <view class="page-container" @touchmove.stop.prevent="() => {}">
     <view class="page-content">
       <!-- 今日行程卡片 -->
       <wd-card class="trip-card-container">
