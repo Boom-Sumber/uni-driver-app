@@ -105,7 +105,7 @@ onMounted(async () => {
     }
     catch (error) {
       uni.reLaunch({
-        url: `/pages/auth/login?startDate=${startDate}&endDate=${endDate}`,
+        url: `/pages/auth/login`,
       })
       throw error
     }
@@ -113,7 +113,7 @@ onMounted(async () => {
   else {
     // 跳转登录页
     uni.reLaunch({
-      url: `/pages/auth/login?startDate=${startDate}&endDate=${endDate}`,
+      url: `/pages/auth/login`,
     })
   }
   // 等待2秒，确保登录页加载完成

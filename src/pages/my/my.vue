@@ -3,9 +3,9 @@ import type { User } from 'supabase-wechat-stable-v2'
 import { onLoad } from '@dcloudio/uni-app'
 import { useRouter } from 'uni-mini-router'
 import { ref } from 'vue'
-import { useMessage, useToast } from 'wot-design-uni'
+import { dayjs, useMessage, useToast } from 'wot-design-uni'
 import { logout, updatePassword } from '@/apis/methods/auth'
-import { clearAllStorage, getStorage } from '@/utils/storage'
+import { getStorage, setStorage } from '@/utils/storage'
 
 const router = useRouter()
 
@@ -80,7 +80,7 @@ function handleLogout() {
           router.replaceAll({ name: 'login' })
         }, 2000)
         // 清除登录态缓存
-        clearAllStorage()
+        setStorage('initStartApp', false, 'infinitely')
       }
       else {
         toast.error('退出登录失败')

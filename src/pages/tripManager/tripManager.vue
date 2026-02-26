@@ -56,7 +56,14 @@ let timer: ReturnType<typeof setTimeout>
 
 onLoad(async () => {
   uni.$on('refreshTripList', async () => {
+    trips.value = await searchTripsByDateRange(startDate, endDate)
     await handleSearch()
+  })
+  uni.$on('daily-refresh', async (o) => {
+    if (o?.isRefresh) {
+      trips.value = await searchTripsByDateRange(dayjs().subtract(1, 'month').format('YYYY-MM-DD'), dayjs().format('YYYY-MM-DD'))
+      await handleSearch()
+    }
   })
   try {
     // 初始化数据

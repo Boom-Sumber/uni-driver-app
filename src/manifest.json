@@ -17,7 +17,9 @@
             "waiting" : true,
             "autoclose" : false
         },
-        "modules" : {},
+        "modules" : {
+            "Camera" : {}
+        },
         "distribute" : {
             "android" : {
                 "permissions" : [

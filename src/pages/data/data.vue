@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import type { CalendarInstance } from 'wot-design-uni/components/wd-calendar/types'
-import type { Trip } from '@/types/trip'
+import type { DateRange, Trip } from '@/types/trip'
 import { onLoad, onNavigationBarButtonTap } from '@dcloudio/uni-app'
 import { computed, ref } from 'vue'
 import { dayjs } from 'wot-design-uni'
-import { searchTripsByDateRange } from '@/apis/methods/trip'
+import { isOfDateRange, searchTripsByDateRange } from '@/apis/methods/trip'
 
 interface Stats {
   totalRecords: number
@@ -49,8 +49,23 @@ const totalInFee = computed(() => {
 })
 
 onLoad(async () => {
-  uni.$on('refreshTripList', async () => {
-    await init()
+  uni.$on('refreshTripList', async (o) => {
+    console.warn('数据中心刷新行程数据')
+
+    const trips = await searchTripsByDateRange(o.startDate, o.endDate)
+    const queryDateRange: DateRange = {
+      startDate: dayjs(dateRange.value[0]).format('YYYY-MM-DD'),
+      endDate: dayjs(dateRange.value[1]).format('YYYY-MM-DD'),
+    }
+    const isInRange = isOfDateRange(trips, queryDateRange)
+
+    if (isInRange) {
+      data.value = trips.filter(trip => trip.trip_date >= queryDateRange.startDate && trip.trip_date <= queryDateRange.endDate)
+      handleStats()
+    }
+    else {
+      await init()
+    }
   })
   await init()
 })
